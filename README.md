@@ -17,6 +17,8 @@ A **premium, real-time multiplayer Bingo game** designed for LAN play. Host a ga
 - 🎯 **Turn-Based Calling**: Players take turns picking numbers to complete their boards.
 - 🕵️ **Suspense Mode**: Opponent line counts are hidden (`? Lines`) to keep the competition intense!
 - 🎨 **Modern UI**: Dark gaming theme with smooth animations and responsive design.
+- 📏 **Dynamic Board Sizes**: Hosts can choose between 5x5, 6x6, 7x7, or 8x8 grids to customize game length and difficulty!
+- 🔄 **Play Again**: Seamlessly restart matches from the game lobby without participants needing to rejoin or reload their browsers.
 - ⚡ **Auto-Fill**: One-click random board generation for quick starts.
 
 ---
