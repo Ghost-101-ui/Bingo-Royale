@@ -1,0 +1,205 @@
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, emit, join_room, leave_room
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, cors_allowed_origins='*', logger=True, engineio_logger=True, async_mode='eventlet')
+
+rooms = {}
+sid_to_room = {}
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@socketio.on('connect')
+def handle_connect():
+    print(f"Client connected: {request.sid}")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    if sid in sid_to_room:
+        room_id = sid_to_room[sid]
+        print(f"Client {sid} disconnected from room {room_id}")
+        
+        if room_id in rooms:
+            room = rooms[room_id]
+            if sid in room['players']:
+                name = room['players'][sid]['name']
+                del room['players'][sid]
+                
+                # Assign new host if host disconnected
+                if sid == room['host_sid']:
+                    if room['players']:
+                        room['host_sid'] = list(room['players'].keys())[0]
+                    else:
+                        room['host_sid'] = None
+                        # Delete room if empty
+                        del rooms[room_id]
+                        
+                # Remove from turn tracking if game is started
+                if room_id in rooms and room['game_started'] and sid in room['turn_order']:
+                    idx = room['turn_order'].index(sid)
+                    room['turn_order'].remove(sid)
+                    
+                    if not room['turn_order']:
+                        # Everyone left but room remains? Edge case
+                        pass
+                    else:
+                        if idx < room['current_turn_index']:
+                            room['current_turn_index'] -= 1
+                        elif room['current_turn_index'] >= len(room['turn_order']):
+                            room['current_turn_index'] = 0
+                            
+                        # Emit a turn update
+                        current_turn_sid = room['turn_order'][room['current_turn_index']]
+                        current_turn_name = room['players'][current_turn_sid]['name'] if current_turn_sid in room['players'] else 'Unknown'
+                        socketio.emit('turn_changed', {'turn_sid': current_turn_sid, 'turn_name': current_turn_name}, to=room_id)
+            
+            if room_id in rooms:
+                emit_player_list(room_id)
+                
+        del sid_to_room[sid]
+
+def emit_player_list(room_id):
+    if room_id not in rooms:
+        return
+    room = rooms[room_id]
+    player_data = []
+    for sid, data in room['players'].items():
+        player_data.append({
+            'id': sid,
+            'name': data['name'],
+            'is_host': sid == room['host_sid'],
+            'board_ready': data['board_ready'],
+            'bingo_lines': data['bingo_lines']
+        })
+    socketio.emit('player_list', {'players': player_data, 'game_started': room['game_started']}, to=room_id)
+
+@socketio.on('join_game')
+def on_join_game(data):
+    room_id = data.get('room', '').upper()
+    name = data.get('name', '').strip()
+    
+    if not name or not room_id:
+        return
+        
+    sid = request.sid
+    join_room(room_id)
+    sid_to_room[sid] = room_id
+    
+    if room_id not in rooms:
+        rooms[room_id] = {
+            'players': {},
+            'game_started': False,
+            'called_numbers': [],
+            'host_sid': sid,
+            'turn_order': [],
+            'current_turn_index': 0
+        }
+    
+    room = rooms[room_id]
+    
+    # If host disconnected and rejoining as first person (rare, but just in case)
+    if room['host_sid'] is None and not room['players']:
+        room['host_sid'] = sid
+        
+    room['players'][sid] = {
+        'name': name,
+        'board_ready': False,
+        'bingo_lines': 0
+    }
+    
+    emit_player_list(room_id)
+    emit('game_state', {
+        'game_started': room['game_started'],
+        'called_numbers': room['called_numbers']
+    }, to=sid)
+
+@socketio.on('set_board')
+def on_set_board(data):
+    sid = request.sid
+    room_id = sid_to_room.get(sid)
+    if not room_id or room_id not in rooms: return
+    
+    room = rooms[room_id]
+    if sid in room['players'] and not room['game_started']:
+        room['players'][sid]['board_ready'] = True
+        emit_player_list(room_id)
+
+@socketio.on('start_game')
+def on_start_game(data):
+    sid = request.sid
+    room_id = sid_to_room.get(sid)
+    if not room_id or room_id not in rooms: return
+    
+    room = rooms[room_id]
+    if sid == room['host_sid'] and not room['game_started']:
+        all_ready = all(p['board_ready'] for p in room['players'].values())
+        if all_ready and len(room['players']) > 0:
+            room['game_started'] = True
+            
+            # Setup turn order (host first, then others)
+            turn_order = [room['host_sid']]
+            for player_sid in room['players'].keys():
+                if player_sid != room['host_sid']:
+                    turn_order.append(player_sid)
+                    
+            room['turn_order'] = turn_order
+            room['current_turn_index'] = 0
+            
+            socketio.emit('start_game', {'status': 'started'}, to=room_id)
+            emit_player_list(room_id)
+            
+            # Broadcast the first turn after starting
+            current_turn_sid = room['turn_order'][room['current_turn_index']]
+            current_turn_name = room['players'][current_turn_sid]['name']
+            socketio.emit('turn_changed', {'turn_sid': current_turn_sid, 'turn_name': current_turn_name}, to=room_id)
+
+@socketio.on('call_number')
+def on_call_number(data):
+    sid = request.sid
+    room_id = sid_to_room.get(sid)
+    if not room_id or room_id not in rooms: return
+    
+    room = rooms[room_id]
+    if room['game_started']:
+        if not room['turn_order']: return
+        
+        expected_sid = room['turn_order'][room['current_turn_index']]
+        if sid == expected_sid:
+            try:
+                number = int(data.get('number'))
+                if number not in room['called_numbers'] and 1 <= number <= 25:
+                    room['called_numbers'].append(number)
+                    
+                    # Move to next person
+                    room['current_turn_index'] = (room['current_turn_index'] + 1) % len(room['turn_order'])
+                    next_turn_sid = room['turn_order'][room['current_turn_index']]
+                    next_turn_name = room['players'][next_turn_sid]['name']
+                    
+                    # Tell everyone
+                    socketio.emit('number_called', {'number': number, 'called_numbers': room['called_numbers']}, to=room_id)
+                    socketio.emit('turn_changed', {'turn_sid': next_turn_sid, 'turn_name': next_turn_name}, to=room_id)
+            except ValueError:
+                pass
+
+@socketio.on('bingo_update')
+def on_bingo_update(data):
+    sid = request.sid
+    room_id = sid_to_room.get(sid)
+    if not room_id or room_id not in rooms: return
+    
+    room = rooms[room_id]
+    if sid in room['players'] and room['game_started']:
+        lines = int(data.get('lines', 0))
+        room['players'][sid]['bingo_lines'] = lines
+        
+        emit_player_list(room_id)
+        
+        if lines >= 5:
+            socketio.emit('winner', {'name': room['players'][sid]['name'], 'sid': sid}, to=room_id)
+
+if __name__ == '__main__':
+    socketio.run(app, host="0.0.0.0", port=5000)
