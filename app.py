@@ -96,7 +96,9 @@ def on_join_game(data):
             'called_numbers': [],
             'host_sid': sid,
             'turn_order': [],
-            'current_turn_index': 0
+            'current_turn_index': 0,
+            'grid_size': 5,
+            'max_number': 25
         }
     
     room = rooms[room_id]
@@ -114,7 +116,9 @@ def on_join_game(data):
     emit_player_list(room_id)
     emit('game_state', {
         'game_started': room['game_started'],
-        'called_numbers': room['called_numbers']
+        'called_numbers': room['called_numbers'],
+        'grid_size': room.get('grid_size', 5),
+        'max_number': room.get('max_number', 25)
     }, to=sid)
 
 @socketio.on('set_board')
@@ -127,6 +131,36 @@ def on_set_board(data):
     if sid in room['players'] and not room['game_started']:
         room['players'][sid]['board_ready'] = True
         emit_player_list(room_id)
+
+@socketio.on('select_grid_size')
+def on_select_grid_size(data):
+    sid = request.sid
+    room_id = sid_to_room.get(sid)
+    if not room_id or room_id not in rooms: return
+    
+    room = rooms[room_id]
+    if sid == room['host_sid'] and not room['game_started']:
+        try:
+            size_map = {
+                '5': (5, 25),
+                '6': (6, 36),
+                '7': (7, 49),
+                '8': (8, 64)
+            }
+            grid_size_str = str(data.get('size'))
+            if grid_size_str in size_map:
+                grid_size, max_number = size_map[grid_size_str]
+                room['grid_size'] = grid_size
+                room['max_number'] = max_number
+                
+                # Reset all players' board ready state
+                for p_sid in room['players']:
+                    room['players'][p_sid]['board_ready'] = False
+                
+                socketio.emit('grid_size_selected', {'grid_size': grid_size, 'max_number': max_number}, to=room_id)
+                emit_player_list(room_id)
+        except ValueError:
+            pass
 
 @socketio.on('start_game')
 def on_start_game(data):
@@ -171,7 +205,8 @@ def on_call_number(data):
         if sid == expected_sid:
             try:
                 number = int(data.get('number'))
-                if number not in room['called_numbers'] and 1 <= number <= 25:
+                max_number = room.get('max_number', 25)
+                if number not in room['called_numbers'] and 1 <= number <= max_number:
                     room['called_numbers'].append(number)
                     
                     # Move to next person
@@ -201,5 +236,25 @@ def on_bingo_update(data):
         if lines >= 5:
             socketio.emit('winner', {'name': room['players'][sid]['name'], 'sid': sid}, to=room_id)
 
-if __name__ == '__main__':
+@socketio.on('play_again')
+def on_play_again(data):
+    sid = request.sid
+    room_id = sid_to_room.get(sid)
+    if not room_id or room_id not in rooms: return
+    
+    room = rooms[room_id]
+    if sid == room['host_sid']:
+        room['game_started'] = False
+        room['called_numbers'] = []
+        room['turn_order'] = []
+        room['current_turn_index'] = 0
+        
+        for p_sid in room['players']:
+            room['players'][p_sid]['board_ready'] = False
+            room['players'][p_sid]['bingo_lines'] = 0
+            
+        socketio.emit('game_reset', to=room_id)
+        emit_player_list(room_id)
+
+if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=5000)

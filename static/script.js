@@ -30,6 +30,8 @@ const numberPalette = document.getElementById('number-palette');
 const setupBoard = document.getElementById('setup-board');
 const autoFillBtn = document.getElementById('auto-fill-btn');
 const submitBoardBtn = document.getElementById('submit-board-btn');
+const gameModeSection = document.getElementById('game-mode-section');
+const modeBtns = document.querySelectorAll('.mode-btn');
 
 // Game UI
 const gameBoard = document.getElementById('game-board');
@@ -46,7 +48,9 @@ const playAgainBtn = document.getElementById('play-again-btn');
 // State
 let myId = null;
 let isHost = false;
-let myBoard = Array(25).fill(null);
+let gridSize = 5;
+let maxNumber = 25;
+let myBoard = Array(maxNumber).fill(null);
 let selectedPaletteNumber = null;
 let boardReady = false;
 let calledNumbers = [];
@@ -105,6 +109,16 @@ createRoomBtn.addEventListener('click', () => {
     let newRoom = '';
     for(let i=0; i<5; i++) newRoom += chars.charAt(Math.floor(Math.random() * chars.length));
     window.location.href = `/?room=${newRoom}`;
+});
+
+modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (isHost) {
+            socket.emit('select_grid_size', { size: btn.dataset.size, room: roomCode });
+        } else {
+            showNotification("Only the host can change the game mode.");
+        }
+    });
 });
 
 // ==========================================
@@ -193,6 +207,17 @@ socket.on('player_list', (data) => {
         gamePlayerList.appendChild(miniLi);
     });
     
+    if (!gameStarted) {
+        if(gameModeSection) gameModeSection.classList.remove('hidden');
+        if (modeBtns) {
+            modeBtns.forEach(btn => {
+                btn.disabled = !isHost;
+            });
+        }
+    } else {
+        if(gameModeSection) gameModeSection.classList.add('hidden');
+    }
+    
     if (isHost && !gameStarted) {
         waitingMsg.classList.add('hidden');
         startGameBtn.classList.remove('hidden');
@@ -212,6 +237,39 @@ socket.on('game_state', (data) => {
     if (data.game_started) {
         showNotification('Game has already started in this room!');
     }
+    if (data.grid_size && data.max_number) {
+        gridSize = data.grid_size;
+        maxNumber = data.max_number;
+        myBoard = Array(maxNumber).fill(null);
+        document.documentElement.style.setProperty('--grid-size', gridSize);
+        modeBtns.forEach(btn => {
+            if (parseInt(btn.dataset.size) === gridSize) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+});
+
+socket.on('grid_size_selected', (data) => {
+    gridSize = data.grid_size;
+    maxNumber = data.max_number;
+    myBoard = Array(maxNumber).fill(null);
+    boardReady = false;
+    
+    document.documentElement.style.setProperty('--grid-size', gridSize);
+    
+    modeBtns.forEach(btn => {
+        if (parseInt(btn.dataset.size) === gridSize) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    setupBoardBtn.textContent = 'Setup My Board';
+    submitBoardBtn.disabled = true;
 });
 
 // ==========================================
@@ -225,7 +283,7 @@ setupBoardBtn.addEventListener('click', () => {
 
 function initSetupBoard() {
     numberPalette.innerHTML = '';
-    for (let i = 1; i <= 25; i++) {
+    for (let i = 1; i <= maxNumber; i++) {
         const numEl = document.createElement('div');
         numEl.className = 'palette-num';
         numEl.textContent = i;
@@ -248,7 +306,7 @@ function initSetupBoard() {
 
 function renderSetupBoardUI() {
     setupBoard.innerHTML = '';
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < maxNumber; i++) {
         const cell = document.createElement('div');
         cell.className = 'board-cell';
         cell.dataset.index = i;
@@ -291,7 +349,7 @@ function checkBoardComplete() {
 }
 
 autoFillBtn.addEventListener('click', () => {
-    const nums = Array.from({length: 25}, (_, i) => i + 1);
+    const nums = Array.from({length: maxNumber}, (_, i) => i + 1);
     for (let i = nums.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [nums[i], nums[j]] = [nums[j], nums[i]];
@@ -397,18 +455,28 @@ function checkBingo() {
         return indices.every(idx => calledNumbers.includes(myBoard[idx]));
     };
     
-    for (let r = 0; r < 5; r++) {
-        const row = [r*5, r*5+1, r*5+2, r*5+3, r*5+4];
+    for (let r = 0; r < gridSize; r++) {
+        const row = [];
+        for (let c = 0; c < gridSize; c++) {
+            row.push(r * gridSize + c);
+        }
         if (isLineCrossed(row)) completedLines++;
     }
     
-    for (let c = 0; c < 5; c++) {
-        const col = [c, c+5, c+10, c+15, c+20];
+    for (let c = 0; c < gridSize; c++) {
+        const col = [];
+        for (let r = 0; r < gridSize; r++) {
+            col.push(r * gridSize + c);
+        }
         if (isLineCrossed(col)) completedLines++;
     }
     
-    const d1 = [0, 6, 12, 18, 24];
-    const d2 = [4, 8, 12, 16, 20];
+    const d1 = [];
+    const d2 = [];
+    for (let i = 0; i < gridSize; i++) {
+        d1.push(i * gridSize + i);
+        d2.push(i * gridSize + (gridSize - 1 - i));
+    }
     if (isLineCrossed(d1)) completedLines++;
     if (isLineCrossed(d2)) completedLines++;
     
@@ -438,8 +506,40 @@ function updateBingoUI(lines) {
 socket.on('winner', (data) => {
     winOverlay.classList.remove('hidden');
     winnerNameEl.textContent = `${data.name} WON!`;
+    if (isHost) {
+        playAgainBtn.textContent = "Play Again (Reset Game)";
+    } else {
+        playAgainBtn.textContent = "Waiting for Host...";
+    }
 });
 
 playAgainBtn.addEventListener('click', () => {
-    window.location.reload();
+    if (isHost) {
+        socket.emit('play_again', { room: roomCode });
+    } else {
+        showNotification("Waiting for the host to restart the game...");
+    }
+});
+
+socket.on('game_reset', () => {
+    winOverlay.classList.add('hidden');
+    
+    // Reset local state
+    myBoard = Array(maxNumber).fill(null);
+    boardReady = false;
+    calledNumbers = [];
+    bingoLines = 0;
+    currentTurnSid = null;
+    selectedPaletteNumber = null;
+    
+    // Reset UI elements
+    document.querySelectorAll('.board-cell').forEach(c => c.classList.remove('crossed', 'recent-call'));
+    lastNumberDisplay.textContent = '-';
+    calledHistory.innerHTML = '';
+    bingoLetters.forEach(l => l.classList.remove('active'));
+    
+    // Return to lobby
+    showScreen('lobby');
+    setupBoardBtn.textContent = 'Setup My Board';
+    submitBoardBtn.disabled = true;
 });

@@ -56,6 +56,15 @@
                 </ul>
                 
                 <div class="lobby-actions">
+                    <div id="game-mode-section" class="game-mode-section hidden">
+                        <h3 class="text-center" style="margin-bottom: 0.8rem; font-size: 1rem; color: var(--text-muted);">Select Game Mode</h3>
+                        <div class="mode-options" style="display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center;">
+                            <button class="secondary-btn mode-btn active" data-size="5" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; min-width: 60px;">5x5</button>
+                            <button class="secondary-btn mode-btn" data-size="6" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; min-width: 60px;">6x6</button>
+                            <button class="secondary-btn mode-btn" data-size="7" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; min-width: 60px;">7x7</button>
+                            <button class="secondary-btn mode-btn" data-size="8" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; min-width: 60px;">8x8</button>
+                        </div>
+                    </div>
                     <p id="waiting-msg" class="waiting-text">Waiting for host to start...</p>
                     <button id="start-game-btn" class="primary-btn pulse-btn hidden">Start Game</button>
                     <button id="setup-board-btn" class="secondary-btn">Setup My Board</button>
