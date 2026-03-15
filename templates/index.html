@@ -12,13 +12,29 @@
 </head>
 <body>
     <div class="app-container">
-        
+        <!-- Intro Overlay Sequence (TEMPORARILY DISABLED)
+        <div id="intro-overlay" class="intro-overlay hidden">
+            <div id="intro-logo" class="logo intro-logo-pos">
+                <span class="bingo">BINGO</span>
+                <span class="royale">ROYALE</span>
+            </div>
+        </div>
+        -->
+
         <!-- Notifications Container -->
         <div id="notifications" class="notifications-container"></div>
         
+        <!-- Music Toggle -->
+        <button id="music-toggle-btn" class="icon-toggle-btn hidden">
+            🔇 Music Off
+        </button>
+        
         <!-- LANDING SCREEN -->
         <div id="landing-screen" class="screen view-active">
-            <h1 class="logo animated-glow">BINGO <span class="accent">ROYALE</span></h1>
+            <div class="logo" style="margin-bottom: 2rem;">
+                <span class="bingo">BINGO</span>
+                <span class="royale">ROYALE</span>
+            </div>
             
             <div class="card fade-in text-center" style="padding: 3rem 2rem;">
                 <h2 style="margin-bottom: 1rem;">Welcome to Bingo Royale</h2>
@@ -29,7 +45,11 @@
 
         <!-- LOBBY SCREEN -->
         <div id="lobby-screen" class="screen hidden">
-            <h1 class="logo animated-glow">BINGO <span class="accent">ROYALE</span></h1>
+            <!-- Header Logo for Lobby (Moves here after anim) -->
+            <div id="lobby-header-logo" class="lobby-logo-final hidden">
+                <span class="bingo">BINGO</span>
+                <span class="royale">ROYALE</span>
+            </div>
             
             <div id="login-panel" class="card fade-in">
                 <h2>Join Game <span id="room-code-display" class="accent"></span></h2>
@@ -37,7 +57,7 @@
                 <button id="join-btn" class="primary-btn">Join Room</button>
             </div>
             
-            <div id="lobby-panel" class="card hidden">
+            <div id="lobby-panel" class="card fade-in hidden">
                 <div class="lobby-header">
                     <h2>Room Lobby</h2>
                     <span id="player-count" class="badge">0 Players</span>
@@ -48,7 +68,7 @@
                 
                 <div class="invite-box" style="margin-bottom: 1.5rem; background: var(--bg-color); padding: 1rem; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
                     <span id="invite-link" style="font-size: 0.9rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;"></span>
-                    <button id="copy-link-btn" class="secondary-btn" style="width: auto; margin-bottom: 0; padding: 0.5rem 1rem;">Copy</button>
+                    <button id="copy-link-btn" class="secondary-btn">Copy</button>
                 </div>
 
                 <ul id="player-list" class="player-list">
@@ -59,15 +79,17 @@
                     <div id="game-mode-section" class="game-mode-section hidden">
                         <h3 class="text-center" style="margin-bottom: 0.8rem; font-size: 1rem; color: var(--text-muted);">Select Game Mode</h3>
                         <div class="mode-options" style="display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center;">
-                            <button class="secondary-btn mode-btn active" data-size="5" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; min-width: 60px;">5x5</button>
-                            <button class="secondary-btn mode-btn" data-size="6" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; min-width: 60px;">6x6</button>
-                            <button class="secondary-btn mode-btn" data-size="7" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; min-width: 60px;">7x7</button>
-                            <button class="secondary-btn mode-btn" data-size="8" style="flex: 1; padding: 0.5rem; font-size: 0.9rem; min-width: 60px;">8x8</button>
+                            <button class="secondary-btn mode-btn active" data-size="5">5x5</button>
+                            <button class="secondary-btn mode-btn" data-size="6">6x6</button>
+                            <button class="secondary-btn mode-btn" data-size="7">7x7</button>
+                            <button class="secondary-btn mode-btn" data-size="8">8x8</button>
                         </div>
                     </div>
                     <p id="waiting-msg" class="waiting-text">Waiting for host to start...</p>
-                    <button id="start-game-btn" class="primary-btn pulse-btn hidden">Start Game</button>
-                    <button id="setup-board-btn" class="secondary-btn">Setup My Board</button>
+                    <div class="btn-row">
+                        <button id="start-game-btn" class="primary-btn pulse-btn hidden">Start Game</button>
+                        <button id="setup-board-btn" class="secondary-btn">Setup My Board</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -94,7 +116,7 @@
                 </div>
             </div>
             
-            <div class="setup-actions">
+            <div class="setup-actions btn-row">
                 <button id="auto-fill-btn" class="secondary-btn">Random Fill</button>
                 <button id="submit-board-btn" class="primary-btn" disabled>Submit Board & Return to Lobby</button>
             </div>
@@ -137,6 +159,11 @@
                         <!-- Updated via Socket.IO -->
                     </ul>
                     
+                    <h3 class="mt-4">Leaderboard</h3>
+                    <ul id="game-leaderboard-list" class="mini-player-list leaderboard-list">
+                        <!-- Updated via Socket.IO -->
+                    </ul>
+                    
                     <h3 class="mt-4">Called Numbers</h3>
                     <div id="called-numbers-history" class="history-grid">
                         <!-- Previous calls -->
@@ -151,7 +178,11 @@
                 <h1 class="win-title">BINGO!</h1>
                 <h2 id="winner-name" class="winner-name">Player Won!</h2>
                 <div class="confetti"></div>
-                <button id="play-again-btn" class="primary-btn">Play Again</button>
+                <div id="host-controls" class="host-controls hidden btn-row">
+                    <button id="next-round-btn" class="primary-btn">Next Round</button>
+                    <button id="end-session-btn" class="danger-btn">End Game Session</button>
+                </div>
+                <p id="participant-wait-msg" class="text-muted hidden" style="margin-top: 1rem;">Waiting for host to choose next action...</p>
             </div>
         </div>
         

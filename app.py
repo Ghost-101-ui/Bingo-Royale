@@ -77,6 +77,14 @@ def emit_player_list(room_id):
         })
     socketio.emit('player_list', {'players': player_data, 'game_started': room['game_started']}, to=room_id)
 
+def emit_leaderboard(room_id):
+    if room_id not in rooms:
+        return
+    room = rooms[room_id]
+    sorted_leaderboard = sorted(room['leaderboard'].items(), key=lambda x: x[1], reverse=True)
+    leaderboard_data = [{'name': name, 'wins': wins} for name, wins in sorted_leaderboard]
+    socketio.emit('leaderboard_update', {'leaderboard': leaderboard_data}, to=room_id)
+
 @socketio.on('join_game')
 def on_join_game(data):
     room_id = data.get('room', '').upper()
@@ -98,7 +106,9 @@ def on_join_game(data):
             'turn_order': [],
             'current_turn_index': 0,
             'grid_size': 5,
-            'max_number': 25
+            'max_number': 25,
+            'leaderboard': {},
+            'round_won': False
         }
     
     room = rooms[room_id]
@@ -113,7 +123,11 @@ def on_join_game(data):
         'bingo_lines': 0
     }
     
+    if name not in room['leaderboard']:
+        room['leaderboard'][name] = 0
+        
     emit_player_list(room_id)
+    emit_leaderboard(room_id)
     emit('game_state', {
         'game_started': room['game_started'],
         'called_numbers': room['called_numbers'],
@@ -173,6 +187,7 @@ def on_start_game(data):
         all_ready = all(p['board_ready'] for p in room['players'].values())
         if all_ready and len(room['players']) > 0:
             room['game_started'] = True
+            room['round_won'] = False
             
             # Setup turn order (host first, then others)
             turn_order = [room['host_sid']]
@@ -234,10 +249,15 @@ def on_bingo_update(data):
         emit_player_list(room_id)
         
         if lines >= 5:
-            socketio.emit('winner', {'name': room['players'][sid]['name'], 'sid': sid}, to=room_id)
+            if not room.get('round_won', False):
+                room['round_won'] = True
+                winner_name = room['players'][sid]['name']
+                room['leaderboard'][winner_name] = room['leaderboard'].get(winner_name, 0) + 1
+                emit_leaderboard(room_id)
+                socketio.emit('winner', {'name': winner_name, 'sid': sid}, to=room_id)
 
-@socketio.on('play_again')
-def on_play_again(data):
+@socketio.on('next_round')
+def on_next_round(data):
     sid = request.sid
     room_id = sid_to_room.get(sid)
     if not room_id or room_id not in rooms: return
@@ -248,13 +268,25 @@ def on_play_again(data):
         room['called_numbers'] = []
         room['turn_order'] = []
         room['current_turn_index'] = 0
+        room['round_won'] = False
         
         for p_sid in room['players']:
             room['players'][p_sid]['board_ready'] = False
             room['players'][p_sid]['bingo_lines'] = 0
             
-        socketio.emit('game_reset', to=room_id)
+        socketio.emit('next_round', to=room_id)
         emit_player_list(room_id)
+
+@socketio.on('end_session')
+def on_end_session(data):
+    sid = request.sid
+    room_id = sid_to_room.get(sid)
+    if not room_id or room_id not in rooms: return
+    
+    room = rooms[room_id]
+    if sid == room['host_sid']:
+        socketio.emit('end_session', to=room_id)
+        del rooms[room_id]
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=5000)
