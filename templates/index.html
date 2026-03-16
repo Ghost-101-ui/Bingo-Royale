@@ -24,10 +24,53 @@
         <!-- Notifications Container -->
         <div id="notifications" class="notifications-container"></div>
         
-        <!-- Music Toggle -->
-        <button id="music-toggle-btn" class="icon-toggle-btn hidden">
-            🔇 Music Off
-        </button>
+        <!-- Music Toggle & Settings -->
+        <div class="top-controls">
+            <button id="music-toggle-btn" class="icon-toggle-btn hidden">
+                🔇 Music Off
+            </button>
+            <button id="settings-btn" class="icon-toggle-btn">
+                ⚙️ Settings
+            </button>
+        </div>
+
+        <!-- Audio Settings Panel -->
+        <div id="settings-panel" class="settings-overlay hidden">
+            <div class="settings-card zoom-in">
+                <h2>Audio Settings</h2>
+                
+                <div class="setting-group">
+                    <div class="setting-header">
+                        <span>Background Music</span>
+                        <label class="switch">
+                            <input type="checkbox" id="bgm-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <input type="range" id="bgm-volume" min="0" max="100" value="20" class="volume-slider">
+                </div>
+
+                <div class="setting-group">
+                    <div class="setting-header">
+                        <span>Sound Effects</span>
+                    </div>
+                    <input type="range" id="sfx-volume" min="0" max="100" value="50" class="volume-slider">
+                </div>
+
+                <div class="setting-group">
+                    <div class="setting-header">
+                        <span style="color: var(--danger);">18+ Mode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="mode-18-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <p class="text-muted" style="font-size: 0.8rem;">Enables alternative sound effects.</p>
+                </div>
+
+                <button id="close-settings-btn" class="primary-btn" style="margin-top: 2rem;">Close</button>
+            </div>
+        </div>
         
         <!-- LANDING SCREEN -->
         <div id="landing-screen" class="screen view-active">
@@ -141,6 +184,7 @@
                 <!-- Turn Indicator Panel -->
                 <div id="turn-banner" class="turn-banner hidden card text-center">
                     <h3 id="turn-text" style="margin: 0;">Waiting for game to start...</h3>
+                    <div id="turn-timer" class="turn-timer hidden">20</div>
                 </div>
             </div>
             

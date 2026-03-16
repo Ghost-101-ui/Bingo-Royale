@@ -54,6 +54,16 @@ const hostControls = document.getElementById('host-controls');
 const nextRoundBtn = document.getElementById('next-round-btn');
 const endSessionBtn = document.getElementById('end-session-btn');
 const participantWaitMsg = document.getElementById('participant-wait-msg');
+const turnTimerEl = document.getElementById('turn-timer');
+
+// Audio Settings Elements
+const settingsBtn = document.getElementById('settings-btn');
+const settingsPanel = document.getElementById('settings-panel');
+const closeSettingsBtn = document.getElementById('close-settings-btn');
+const bgmToggle = document.getElementById('bgm-toggle');
+const mode18Toggle = document.getElementById('mode-18-toggle');
+const bgmVolumeSlider = document.getElementById('bgm-volume');
+const sfxVolumeSlider = document.getElementById('sfx-volume');
 
 // State
 let myId = null;
@@ -66,6 +76,8 @@ let boardReady = false;
 let calledNumbers = [];
 let bingoLines = 0;
 let currentTurnSid = null;
+let turnTimerInterval = null;
+let timeLeft = 20;
 
 // Sound Manager
 const SoundManager = {
@@ -78,48 +90,100 @@ const SoundManager = {
     loss: new Audio('/static/sounds/loss.mp3'),
     notYourTurn: new Audio('/static/sounds/fahhh.mp3'),
 
+    // 18+ Mode sounds
+    win18: new Audio('/static/sounds/bete-win.mp3'),
+    loss18: new Audio('/static/sounds/bsdk-loss.mp3'),
+    btnClick18: new Audio('/static/sounds/ahh-btn.mp3'),
+
     isMuted: false,
+    is18Plus: false,
+    bgmVolume: 0.2,
+    sfxVolume: 0.5,
 
     init() {
-        this.bgMusic.loop = true;
-        this.bgMusic.volume = 0.02; // Very low volume (2%)
+        // Load settings from localStorage
+        const savedBgmVol = localStorage.getItem('bgmVolume');
+        const savedSfxVol = localStorage.getItem('sfxVolume');
+        const savedIsMuted = localStorage.getItem('bgmMuted');
+        const savedIs18Plus = localStorage.getItem('is18Plus');
 
-        // Lower button click volume to 20%
-        this.btnClick.volume = 0.2;
-        this.yourTurn.volume = 0.2;
-        
-        // Lower win and loss volume to 30%
-        this.win.volume = 0.3;
-        this.loss.volume = 0.3;
-        this.joinRoom.volume = 0.3;
+        if (savedBgmVol !== null) this.bgmVolume = parseFloat(savedBgmVol);
+        if (savedSfxVol !== null) this.sfxVolume = parseFloat(savedSfxVol);
+        if (savedIsMuted !== null) this.isMuted = savedIsMuted === 'true';
+        if (savedIs18Plus !== null) this.is18Plus = savedIs18Plus === 'true';
+
+        // Update UI elements to match state
+        if (bgmVolumeSlider) bgmVolumeSlider.value = this.bgmVolume * 100;
+        if (sfxVolumeSlider) sfxVolumeSlider.value = this.sfxVolume * 100;
+        if (bgmToggle) bgmToggle.checked = !this.isMuted;
+        if (mode18Toggle) mode18Toggle.checked = this.is18Plus;
+
+        this.bgMusic.loop = true;
+        this.loss18.loop = true; // Loop the 18+ loss sound as requested
+        this.updateVolumes();
 
         // When join-room finishes, wait 0.5s before kicking off BG music
         this.joinRoom.addEventListener('ended', () => {
             this.playBgMusic(500);
         });
-
-        // When create game chalo finishes, wait 0.5s before kicking off BG music
-        this.btnClick.addEventListener('ended', () => {
-            // We only hook this for create-room since it uses btnClick,
-            // but to be clean we just use direct timeout in createRoom listener.
-        });
     },
 
-    toggleMusic() {
-        if (this.isMuted) {
-            this.bgMusic.play().catch(e => console.log(e));
-            this.isMuted = false;
-            if (musicToggleBtn) {
-                musicToggleBtn.innerHTML = '🔊 Music On';
-                musicToggleBtn.classList.add('playing');
-            }
+    updateVolumes() {
+        this.bgMusic.volume = this.bgmVolume;
+        this.joinRoom.volume = this.sfxVolume;
+        this.startGame.volume = this.sfxVolume;
+        this.btnClick.volume = this.sfxVolume;
+        this.yourTurn.volume = this.sfxVolume;
+        this.win.volume = this.sfxVolume;
+        this.loss.volume = this.sfxVolume;
+        this.notYourTurn.volume = this.sfxVolume;
+
+        // 18+ sounds volume
+        this.win18.volume = this.sfxVolume;
+        this.loss18.volume = this.sfxVolume;
+        this.btnClick18.volume = this.sfxVolume;
+    },
+
+    setBgmVolume(val) {
+        this.bgmVolume = val / 100;
+        this.bgMusic.volume = this.bgmVolume;
+        localStorage.setItem('bgmVolume', this.bgmVolume);
+    },
+
+    setSfxVolume(val) {
+        this.sfxVolume = val / 100;
+        this.updateVolumes();
+        localStorage.setItem('sfxVolume', this.sfxVolume);
+    },
+
+    toggle18Plus(state) {
+        this.is18Plus = state;
+        localStorage.setItem('is18Plus', this.is18Plus);
+    },
+
+    toggleMusic(forceState = null) {
+        if (forceState !== null) {
+            this.isMuted = !forceState;
         } else {
+            this.isMuted = !this.isMuted;
+        }
+
+        localStorage.setItem('bgmMuted', this.isMuted);
+
+        if (this.isMuted) {
             this.bgMusic.pause();
-            this.isMuted = true;
             if (musicToggleBtn) {
                 musicToggleBtn.innerHTML = '🔇 Music Off';
                 musicToggleBtn.classList.remove('playing');
             }
+            if (bgmToggle) bgmToggle.checked = false;
+        } else {
+            this.bgMusic.play().catch(e => console.log(e));
+            if (musicToggleBtn) {
+                musicToggleBtn.innerHTML = '🔊 Music On';
+                musicToggleBtn.classList.add('playing');
+            }
+            if (bgmToggle) bgmToggle.checked = true;
         }
     },
 
@@ -130,16 +194,20 @@ const SoundManager = {
                 musicToggleBtn.innerHTML = '🔊 Music On';
                 musicToggleBtn.classList.add('playing');
             }
+            if (bgmToggle) bgmToggle.checked = true;
             this.isMuted = false;
+            localStorage.setItem('bgmMuted', 'false');
 
             setTimeout(() => {
                 this.bgMusic.play().catch(e => {
                     console.log("Audio autoplay prevented by browser.");
                     this.isMuted = true;
+                    localStorage.setItem('bgmMuted', 'true');
                     if (musicToggleBtn) {
                         musicToggleBtn.innerHTML = '🔇 Music Off';
                         musicToggleBtn.classList.remove('playing');
                     }
+                    if (bgmToggle) bgmToggle.checked = false;
                 });
             }, delayMs);
         }
@@ -157,7 +225,12 @@ const SoundManager = {
 
     playBtnClick() {
         this.btnClick.currentTime = 0;
-        this.btnClick.play().catch(e => console.log("Audio play prevented."));
+        this.btnClick18.currentTime = 0;
+        if (this.is18Plus) {
+            this.btnClick18.play().catch(e => console.log("Audio play prevented."));
+        } else {
+            this.btnClick.play().catch(e => console.log("Audio play prevented."));
+        }
     },
 
     playYourTurn() {
@@ -167,12 +240,34 @@ const SoundManager = {
 
     playWin() {
         this.win.currentTime = 0;
-        this.win.play().catch(e => console.log("Audio play prevented."));
+        this.win18.currentTime = 0;
+        if (this.is18Plus) {
+            this.win18.play().catch(e => console.log("Audio play prevented."));
+        } else {
+            this.win.play().catch(e => console.log("Audio play prevented."));
+        }
     },
 
     playLoss() {
         this.loss.currentTime = 0;
-        this.loss.play().catch(e => console.log("Audio play prevented."));
+        this.loss18.currentTime = 0;
+        if (this.is18Plus) {
+            this.loss18.play().catch(e => console.log("Audio play prevented."));
+        } else {
+            this.loss.play().catch(e => console.log("Audio play prevented."));
+        }
+    },
+
+    stopAllLoopingSounds() {
+        // Stop all win and loss sounds
+        this.win.pause();
+        this.win.currentTime = 0;
+        this.loss.pause();
+        this.loss.currentTime = 0;
+        this.win18.pause();
+        this.win18.currentTime = 0;
+        this.loss18.pause();
+        this.loss18.currentTime = 0;
     },
 
     playNotYourTurn() {
@@ -187,6 +282,45 @@ SoundManager.init();
 if (musicToggleBtn) {
     musicToggleBtn.addEventListener('click', () => {
         SoundManager.toggleMusic();
+    });
+}
+
+// Audio Settings Listeners
+if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        settingsPanel.classList.remove('hidden');
+    });
+}
+
+if (closeSettingsBtn) {
+    closeSettingsBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        settingsPanel.classList.add('hidden');
+    });
+}
+
+if (bgmToggle) {
+    bgmToggle.addEventListener('change', (e) => {
+        SoundManager.toggleMusic(e.target.checked);
+    });
+}
+
+if (bgmVolumeSlider) {
+    bgmVolumeSlider.addEventListener('input', (e) => {
+        SoundManager.setBgmVolume(e.target.value);
+    });
+}
+
+if (sfxVolumeSlider) {
+    sfxVolumeSlider.addEventListener('input', (e) => {
+        SoundManager.setSfxVolume(e.target.value);
+    });
+}
+
+if (mode18Toggle) {
+    mode18Toggle.addEventListener('change', (e) => {
+        SoundManager.toggle18Plus(e.target.checked);
     });
 }
 
@@ -631,7 +765,33 @@ socket.on('turn_changed', (data) => {
         turnText.className = '';
         gameBoard.classList.remove('my-turn');
     }
+    
+    startClientTimer();
 });
+
+function startClientTimer() {
+    clearInterval(turnTimerInterval);
+    timeLeft = 20;
+    
+    if (turnTimerEl) {
+        turnTimerEl.classList.remove('hidden', 'low-time');
+        turnTimerEl.textContent = timeLeft;
+    }
+
+    turnTimerInterval = setInterval(() => {
+        timeLeft--;
+        if (turnTimerEl) {
+            turnTimerEl.textContent = timeLeft;
+            if (timeLeft <= 5) {
+                turnTimerEl.classList.add('low-time');
+            }
+        }
+
+        if (timeLeft <= 0) {
+            clearInterval(turnTimerInterval);
+        }
+    }, 1000);
+}
 
 socket.on('number_called', (data) => {
     const num = data.number;
@@ -653,6 +813,10 @@ socket.on('number_called', (data) => {
     historyItem.className = 'history-num fade-in';
     historyItem.textContent = num;
     calledHistory.appendChild(historyItem);
+
+    // Stop timer when a number is called
+    clearInterval(turnTimerInterval);
+    if (turnTimerEl) turnTimerEl.classList.add('hidden');
 });
 
 // ==========================================
@@ -769,6 +933,11 @@ socket.on('next_round', () => {
     lastNumberDisplay.textContent = '-';
     calledHistory.innerHTML = '';
     bingoLetters.forEach(l => l.classList.remove('active'));
+    clearInterval(turnTimerInterval);
+    if (turnTimerEl) turnTimerEl.classList.add('hidden');
+
+    // Stop looping sounds from previous round
+    SoundManager.stopAllLoopingSounds();
 
     // Return to lobby
     showScreen('lobby');

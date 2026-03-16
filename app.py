@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
+import threading
+import random
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -7,6 +9,7 @@ socketio = SocketIO(app, cors_allowed_origins='*', logger=True, engineio_logger=
 
 rooms = {}
 sid_to_room = {}
+# No longer need room_timers dict for threading.Timer Objects
 
 @app.route('/')
 def index():
@@ -36,6 +39,8 @@ def handle_disconnect():
                     else:
                         room['host_sid'] = None
                         # Delete room if empty
+                        if room_id in rooms:
+                            rooms[room_id]['turn_version'] = rooms[room_id].get('turn_version', 0) + 1
                         del rooms[room_id]
                         
                 # Remove from turn tracking if game is started
@@ -59,8 +64,72 @@ def handle_disconnect():
             
             if room_id in rooms:
                 emit_player_list(room_id)
+                # If it was the disconnected player's turn, the timer should be reset/handled
+                # but start_turn_timer already cancels previous timers.
+                if room['game_started'] and room['turn_order']:
+                    start_turn_timer(room_id)
                 
         del sid_to_room[sid]
+
+def cancel_room_timer(room_id):
+    if room_id in rooms:
+        # Incrementing the version effectively cancels any running background tasks
+        rooms[room_id]['turn_version'] = rooms[room_id].get('turn_version', 0) + 1
+
+def start_turn_timer(room_id, duration=20):
+    if room_id not in rooms or not rooms[room_id]['game_started']:
+        return
+
+    # Increment version to "cancel" previous tasks
+    version = rooms[room_id].get('turn_version', 0) + 1
+    rooms[room_id]['turn_version'] = version
+    
+    def timer_task(r_id, v):
+        socketio.sleep(duration)
+        # Check if this task is still the current one for the room
+        if r_id in rooms and rooms[r_id].get('turn_version') == v:
+            if rooms[r_id]['game_started'] and not rooms[r_id]['round_won']:
+                auto_select_number(r_id)
+
+    socketio.start_background_task(timer_task, room_id, version)
+
+def auto_select_number(room_id):
+    if room_id not in rooms:
+        return
+    
+    room = rooms[room_id]
+    if not room['game_started'] or room['round_won']:
+        return
+
+    if not room['turn_order']:
+        return
+
+    # Find the current player's SID
+    current_sid = room['turn_order'][room['current_turn_index']]
+    
+    # Pick a random number that hasn't been called
+    max_num = room.get('max_number', 25)
+    available_numbers = [i for i in range(1, max_num + 1) if i not in room['called_numbers']]
+    
+    if not available_numbers:
+        return
+
+    number = random.choice(available_numbers)
+    
+    # Process the choice (using the logic from on_call_number but for an internal call)
+    room['called_numbers'].append(number)
+    
+    # Move to next person
+    room['current_turn_index'] = (room['current_turn_index'] + 1) % len(room['turn_order'])
+    next_turn_sid = room['turn_order'][room['current_turn_index']]
+    next_turn_name = room['players'][next_turn_sid]['name']
+    
+    # Tell everyone
+    socketio.emit('number_called', {'number': number, 'called_numbers': room['called_numbers'], 'auto': True}, to=room_id)
+    socketio.emit('turn_changed', {'turn_sid': next_turn_sid, 'turn_name': next_turn_name}, to=room_id)
+    
+    # Start timer for next person
+    start_turn_timer(room_id)
 
 def emit_player_list(room_id):
     if room_id not in rooms:
@@ -205,6 +274,9 @@ def on_start_game(data):
             current_turn_sid = room['turn_order'][room['current_turn_index']]
             current_turn_name = room['players'][current_turn_sid]['name']
             socketio.emit('turn_changed', {'turn_sid': current_turn_sid, 'turn_name': current_turn_name}, to=room_id)
+            
+            # Start the 20s timer for the first player
+            start_turn_timer(room_id)
 
 @socketio.on('call_number')
 def on_call_number(data):
@@ -232,6 +304,9 @@ def on_call_number(data):
                     # Tell everyone
                     socketio.emit('number_called', {'number': number, 'called_numbers': room['called_numbers']}, to=room_id)
                     socketio.emit('turn_changed', {'turn_sid': next_turn_sid, 'turn_name': next_turn_name}, to=room_id)
+                    
+                    # Reset timer for the next person
+                    start_turn_timer(room_id)
             except ValueError:
                 pass
 
@@ -255,6 +330,9 @@ def on_bingo_update(data):
                 room['leaderboard'][winner_name] = room['leaderboard'].get(winner_name, 0) + 1
                 emit_leaderboard(room_id)
                 socketio.emit('winner', {'name': winner_name, 'sid': sid}, to=room_id)
+                
+                # Stop the timer when someone wins
+                cancel_room_timer(room_id)
 
 @socketio.on('next_round')
 def on_next_round(data):
@@ -276,6 +354,7 @@ def on_next_round(data):
             
         socketio.emit('next_round', to=room_id)
         emit_player_list(room_id)
+        cancel_room_timer(room_id)
 
 @socketio.on('end_session')
 def on_end_session(data):
@@ -286,6 +365,8 @@ def on_end_session(data):
     room = rooms[room_id]
     if sid == room['host_sid']:
         socketio.emit('end_session', to=room_id)
+        if room_id in rooms:
+            rooms[room_id]['turn_version'] = rooms[room_id].get('turn_version', 0) + 1
         del rooms[room_id]
 
 if __name__ == "__main__":
