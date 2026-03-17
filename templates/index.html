@@ -18,12 +18,12 @@
     <div class="app-container">
         <!-- Cinematic Intro System -->
         <div id="intro-container" class="intro-container">
-            <!-- Step 2: CyberEDT Games presents -->
+            <!-- Step 1: CyberEDT Games presents -->
             <div id="step-presents" class="intro-step hidden">
                 <h1 class="presents-text">CyberEDT Games presents</h1>
             </div>
 
-            <!-- Step 3: CyberEDT Logo -->
+            <!-- Step 2: CyberEDT Logo -->
             <div id="step-logo" class="intro-step hidden">
                 <div class="logo-wrapper">
                     <div class="cedt-text-logo">
@@ -37,11 +37,16 @@
             </div>
         </div>
 
-        <!-- Persistent Animated Logo (Unhidden during step 5) -->
+        <!-- Step 3: BINGO ROYALE Logo -->
         <div id="intro-bingo-logo" class="logo intro-logo-center hidden">
             <span class="bingo">BINGO</span>
             <span class="royale">ROYALE</span>
         </div>
+
+        <!-- Intro Audio -->
+        <audio id="audio-boom1" src="{{ url_for('static', filename='sounds/boom1.mp3') }}" preload="auto"></audio>
+        <audio id="audio-boom2" src="{{ url_for('static', filename='sounds/boom2.mp3') }}" preload="auto"></audio>
+        <audio id="audio-boom3" src="{{ url_for('static', filename='sounds/boom3.mp3') }}" preload="auto"></audio>
 
         <!-- Notifications Container -->
         <div id="notifications" class="notifications-container"></div>
@@ -54,12 +59,6 @@
             <button id="settings-btn" class="icon-toggle-btn">
                 ⚙️ Settings
             </button>
-            <!-- 
-            <button id="top-chat-btn" class="icon-toggle-btn">
-                💬 Chat
-                <span id="top-chat-badge" class="chat-badge-inline hidden" style="margin-left: 5px;">0</span>
-            </button> 
-            -->
         </div>
 
         <!-- Audio Settings Panel -->
@@ -102,55 +101,41 @@
 
         <!-- LANDING SCREEN -->
         <div id="landing-screen" class="screen view-active">
-            <!-- Cinematic logo moves here -->
-
             <div class="card fade-in text-center" style="padding: 3rem 2rem;">
                 <h2 style="margin-bottom: 1rem;">Welcome to Bingo Royale</h2>
-                <p class="text-muted" style="margin-bottom: 2rem;">Create a new private game room and invite your
-                    friends!</p>
+                <p class="text-muted" style="margin-bottom: 2rem;">Create a new private game room and invite your friends!</p>
                 <button id="create-room-btn" class="primary-btn pulse-btn">Create New Game</button>
             </div>
         </div>
 
         <!-- LOBBY SCREEN -->
         <div id="lobby-screen" class="screen hidden">
-            <!-- Cinematic logo moves here -->
-
             <div id="login-panel" class="card fade-in">
                 <h2>Join Game <span id="room-code-display" class="accent"></span></h2>
-                <input type="text" id="player-name-input" placeholder="Enter name (e.g. Dhruv)" maxlength="15"
-                    autofocus>
+                <input type="text" id="player-name-input" placeholder="Enter name (e.g. Dhruv)" maxlength="15" autofocus>
                 <button id="join-btn" class="primary-btn">Join Room</button>
             </div>
 
             <div id="lobby-panel" class="card fade-in hidden">
                 <div class="lobby-header">
-                    <h2>Room Lobby</h2>
+                    <h2>Room Lobby <span id="lobby-room-code" class="accent"></span></h2>
                     <span id="player-count" class="badge">0 Players</span>
                 </div>
 
                 <div id="qrcode-container" class="qr-container"></div>
-                <p class="text-center text-muted" style="margin-bottom: 1rem; font-size: 0.9rem;">Scan to join or use
-                    link below</p>
+                <p class="text-center text-muted" style="margin-bottom: 1rem; font-size: 0.9rem;">Scan to join or use link below</p>
 
-                <div class="invite-box"
-                    style="margin-bottom: 1.5rem; background: var(--bg-color); padding: 1rem; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                    <span id="invite-link"
-                        style="font-size: 0.9rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;"></span>
+                <div class="invite-box" style="margin-bottom: 1.5rem; background: var(--bg-color); padding: 1rem; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                    <span id="invite-link" style="font-size: 0.9rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;"></span>
                     <button id="copy-link-btn" class="secondary-btn">Copy</button>
                 </div>
 
-                <ul id="player-list" class="player-list">
-                    <!-- Players inserted here via JS -->
-                </ul>
+                <ul id="player-list" class="player-list"></ul>
 
                 <div class="lobby-actions">
                     <div id="game-mode-section" class="game-mode-section hidden">
-                        <h3 class="text-center"
-                            style="margin-bottom: 0.8rem; font-size: 1rem; color: var(--text-muted);">Select Game Mode
-                        </h3>
-                        <div class="mode-options"
-                            style="display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center;">
+                        <h3 class="text-center" style="margin-bottom: 0.8rem; font-size: 1rem; color: var(--text-muted);">Select Game Mode</h3>
+                        <div class="mode-options" style="display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center;">
                             <button class="secondary-btn mode-btn active" data-size="5">5x5</button>
                             <button class="secondary-btn mode-btn" data-size="6">6x6</button>
                             <button class="secondary-btn mode-btn" data-size="7">7x7</button>
@@ -163,12 +148,6 @@
                     <div class="btn-row">
                         <button id="start-game-btn" class="primary-btn pulse-btn hidden">Start Game</button>
                         <button id="setup-board-btn" class="secondary-btn">Setup My Board</button>
-                        <!-- 
-                        <button id="chat-toggle-btn" class="secondary-btn" style="background: var(--accent); color: #000;">
-                            <span>💬 Room Chat</span>
-                            <span id="chat-badge" class="chat-badge-inline hidden">0</span>
-                        </button>
-                        -->
                     </div>
                 </div>
             </div>
@@ -180,19 +159,13 @@
             <p class="subtitle">Select a number below, then click a cell on the board to place it.</p>
 
             <div class="setup-layout">
-                <!-- Palette -->
                 <div class="palette-container card">
                     <h3>Numbers to Place</h3>
-                    <div id="number-palette" class="number-palette">
-                        <!-- Numbers 1-25 generated by JS -->
-                    </div>
+                    <div id="number-palette" class="number-palette"></div>
                 </div>
 
-                <!-- Board -->
                 <div class="board-container card">
-                    <div id="setup-board" class="bingo-board interactive">
-                        <!-- 5x5 Grid generated by JS -->
-                    </div>
+                    <div id="setup-board" class="bingo-board interactive"></div>
                 </div>
             </div>
 
@@ -218,7 +191,6 @@
                     <div id="last-number-display" class="last-number">-</div>
                 </div>
 
-                <!-- Turn Indicator Panel -->
                 <div id="turn-banner" class="turn-banner hidden card text-center">
                     <h3 id="turn-text" style="margin: 0;">Waiting for game to start...</h3>
                     <div id="turn-timer" class="turn-timer hidden">20</div>
@@ -226,42 +198,19 @@
             </div>
 
             <div class="game-layout">
-                <!-- Game Board -->
                 <div class="board-container card fade-in-up">
-                    <div id="game-board" class="bingo-board active-game">
-                        <!-- Cloned from setup -->
-                    </div>
+                    <div id="game-board" class="bingo-board active-game"></div>
                 </div>
 
-                <!-- Sidebar -->
                 <div class="game-sidebar card fade-in-right">
                     <h3>Players</h3>
-                    <ul id="game-player-list" class="mini-player-list">
-                        <!-- Updated via Socket.IO -->
-                    </ul>
+                    <ul id="game-player-list" class="mini-player-list"></ul>
 
                     <h3 class="mt-4">Leaderboard</h3>
-                    <ul id="game-leaderboard-list" class="mini-player-list leaderboard-list">
-                        <!-- Updated via Socket.IO -->
-                    </ul>
+                    <ul id="game-leaderboard-list" class="mini-player-list leaderboard-list"></ul>
 
                     <h3 class="mt-4">Called Numbers</h3>
-                    <div id="called-numbers-history" class="history-grid">
-                        <!-- Previous calls -->
-                    </div>
-
-                    <!-- Sidebar Chat -->
-                    <!-- 
-                    <div class="sidebar-chat-section mt-4">
-                        <h3>Room Chat</h3>
-                        <div id="sidebar-messages" class="sidebar-messages">
-                        </div>
-                        <div class="sidebar-chat-input-row">
-                            <input type="text" id="sidebar-chat-input" placeholder="Type a message..." maxlength="100">
-                            <button id="sidebar-send-btn">Send</button>
-                        </div>
-                    </div> 
-                    -->
+                    <div id="called-numbers-history" class="history-grid"></div>
                 </div>
             </div>
         </div>
@@ -276,31 +225,10 @@
                     <button id="next-round-btn" class="primary-btn">Next Round</button>
                     <button id="end-session-btn" class="danger-btn">End Game Session</button>
                 </div>
-                <p id="participant-wait-msg" class="text-muted hidden" style="margin-top: 1rem;">Waiting for host to
-                    choose next action...</p>
+                <p id="participant-wait-msg" class="text-muted hidden" style="margin-top: 1rem;">Waiting for host to choose next action...</p>
             </div>
         </div>
 
-        <!-- CHAT SECTION (FLOATING) -->
-        <!-- 
-        <div id="chat-container" class="chat-container hidden">
-            <div class="chat-header">
-                <h3>Chat</h3>
-                <button id="close-chat-btn" class="close-btn">&times;</button>
-            </div>
-            <div id="chat-messages" class="chat-messages">
-            </div>
-            <div class="chat-input-area">
-                <input type="text" id="chat-input" placeholder="Type a message..." maxlength="100">
-                <button id="send-chat-btn">Send</button>
-            </div>
-        </div>
-
-        <button id="floating-chat-btn" class="floating-chat-btn">
-            <span class="chat-icon">💬</span>
-            <span id="floating-chat-badge" class="chat-badge hidden">0</span>
-        </button>
-        -->
         <!-- Footer Credits -->
         <footer class="app-footer">
             <p>Developed with ❤️ by Dhruv Patel </p>

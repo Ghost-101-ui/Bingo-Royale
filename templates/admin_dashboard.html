@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Bingo Royale</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/admin_analytics.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="admin-wrapper">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">B<span>R</span></div>
+                <h3>Admin</h3>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="active" data-section="overview"><span class="icon">📊</span> Overview</a>
+                <a href="#" data-section="rooms-section"><span class="icon">🎮</span> Rooms</a>
+                <a href="#" data-section="leaderboard-section"><span class="icon">🥇</span> Leaders</a>
+                <a href="/dhruv-only-see-6x10/logout" class="logout"><span class="icon">🚪</span> Logout</a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="page-info">
+                    <h1>Real-Time Analytics</h1>
+                    <p id="live-indicator">● LIVE SYNC ACTIVE</p>
+                </div>
+                <div class="admin-profile">
+                    <span class="badge">SuperAdmin</span>
+                    <span id="server-time">--:--:--</span>
+                </div>
+            </header>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid content-section overview-only">
+                <div class="stat-card">
+                    <div class="stat-icon">🏠</div>
+                    <div class="stat-details">
+                        <p class="label">Total Rooms</p>
+                        <h2 id="stat-total-rooms">{{ stats.total_rooms_created }}</h2>
+                    </div>
+                </div>
+                <div class="stat-card active-pulse">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-details">
+                        <p class="label">Active Rooms</p>
+                        <h2 id="stat-active-rooms">{{ stats.active_rooms }}</h2>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-details">
+                        <p class="label">Total Players</p>
+                        <h2 id="stat-total-players">{{ stats.total_players_joined }}</h2>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🟢</div>
+                    <div class="stat-details">
+                        <p class="label">Online Now</p>
+                        <h2 id="stat-online-players">{{ stats.current_players_online }}</h2>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📈</div>
+                    <div class="stat-details">
+                        <p class="label">Peak Players</p>
+                        <h2 id="stat-peak-players">{{ stats.peak_players }}</h2>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🔄</div>
+                    <div class="stat-details">
+                        <p class="label">Avg Rounds</p>
+                        <h2 id="stat-avg-rounds">{{ avg_rounds }}</h2>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spotlight Section -->
+            <div class="dashboard-row content-section overview-only">
+                <div class="spotlight-card card">
+                    <h3>🔥 Most Active Room</h3>
+                    <div id="active-room-spotlight">
+                        <p class="empty-msg">No active games</p>
+                    </div>
+                </div>
+                <div class="activity-chart card">
+                    <h3>📈 Player Activity</h3>
+                    <div class="chart-container">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Charts -->
+            <div class="dashboard-row content-section overview-only">
+                <div class="engagement-chart card">
+                    <h3>⚖️ Engagement Ratio</h3>
+                    <div class="chart-container">
+                        <canvas id="engagementChart"></canvas>
+                    </div>
+                </div>
+                <div class="heatmap-chart card">
+                    <h3>🔥 Usage Heatmap</h3>
+                    <div class="chart-container">
+                        <canvas id="heatmapChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tables Row -->
+            <div class="dashboard-row">
+                <div id="rooms-section" class="rooms-panel card content-section">
+                    <div class="panel-header">
+                        <h3>🎮 Active Rooms</h3>
+                        <span class="badge" id="room-count">{{ rooms|length }}</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="rooms-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Players</th>
+                                    <th>Round</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for id, room in rooms.items() %}
+                                <tr>
+                                    <td>#{{ id }}</td>
+                                    <td>{{ room.players|length }}</td>
+                                    <td>{{ room.get('round', 1) }}</td>
+                                    <td><span class="status {{ 'playing' if room.game_started else 'waiting' }}">{{ 'Playing' if room.game_started else 'Waiting' }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="leaderboard-section" class="leaderboard-panel card content-section">
+                    <h3>🥇 Global Hall of Fame</h3>
+                    <div class="table-wrapper">
+                        <table id="leaderboard-table">
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th>Total Wins</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for name, wins in global_leaderboard %}
+                                <tr>
+                                    <td>{{ name }}</td>
+                                    <td class="wins">{{ wins }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/admin_analytics.js"></script>
+</body>
+</html>
