@@ -416,7 +416,7 @@ const IntroManager = {
             this.steps.phase1.classList.add('active');
         }
 
-        await this.delay(3000); // 3s matches text animation
+        await this.delay(1500); // 1.5s matches text animation
         
         if (this.steps.phase1) {
             this.steps.phase1.classList.replace('active', 'fade-out');
@@ -430,7 +430,7 @@ const IntroManager = {
             SoundManager.boom2.play().catch(e => console.warn("Boom2 blocked"));
         }
 
-        await this.delay(8000); 
+        await this.delay(3000); 
         
         if (this.steps.phase2) {
             this.steps.phase2.classList.replace('active', 'fade-out');
@@ -537,20 +537,16 @@ joinBtn.addEventListener('pointerdown', () => {
 joinBtn.addEventListener('click', () => {
     const name = nameInput.value.trim();
     if (name && roomCode) {
+        localStorage.setItem('bingo_name', name);
+        localStorage.setItem('bingo_room', roomCode);
+        
         socket.emit('join_game', { name: name, room: roomCode });
         loginPanel.classList.add('hidden');
         lobbyPanel.classList.remove('hidden');
         inviteLink.textContent = window.location.href;
 
-        qrcodeContainer.innerHTML = '';
-        new QRCode(qrcodeContainer, {
-            text: window.location.href,
-            width: 156,
-            height: 156,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.L
-        });
+        renderQRCode();
+        
         lobbyHeaderLogo.classList.remove('hidden');
         lobbyHeaderLogo.style.opacity = "1";
 
@@ -576,11 +572,40 @@ copyLinkBtn.addEventListener('click', () => {
 
 socket.on('connect', () => {
     myId = socket.id;
+    console.log("Connected with ID:", myId);
+    
+    // Auto-rejoin if we have room info
+    const savedName = localStorage.getItem('bingo_name');
+    const savedRoom = localStorage.getItem('bingo_room');
+    if (savedName && savedRoom && roomCode === savedRoom) {
+        console.log("Attempting auto-rejoin...");
+        socket.emit('join_game', { name: savedName, room: savedRoom });
+        
+        // Update UI state to lobby
+        loginPanel.classList.add('hidden');
+        lobbyPanel.classList.remove('hidden');
+        inviteLink.textContent = window.location.href;
+        renderQRCode();
+    }
 });
+
+function renderQRCode() {
+    qrcodeContainer.innerHTML = '';
+    new QRCode(qrcodeContainer, {
+        text: window.location.href,
+        width: 156,
+        height: 156,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.L
+    });
+}
 
 socket.on('player_list', (data) => {
     const players = data.players;
     const gameStarted = data.game_started;
+    
+    console.log("Player List Received:", players, "My SID:", myId);
 
     playerList.innerHTML = '';
     gamePlayerList.innerHTML = '';

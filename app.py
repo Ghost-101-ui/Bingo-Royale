@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, session
 import time
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -114,6 +116,7 @@ global_leaderboard = LeaderboardTracker()
 # Current Session Data
 rooms: Dict[str, Any] = {}
 sid_to_room: Dict[str, str] = {}
+inactive_players: Dict[str, Dict[str, Any]] = {} # room_id -> {name -> {data, timeout_task}}
 stats_history: List[Dict[str, Any]] = [] 
 
 @app.route('/')
@@ -227,53 +230,61 @@ def handle_disconnect():
         if room_id in rooms:
             room = rooms[room_id]
             if sid in room['players']:
-                name = room['players'][sid]['name']
+                player_data = room['players'][sid]
+                name = player_data['name']
+                
+                # Move to inactive instead of deleting immediately
+                if room_id not in inactive_players:
+                    inactive_players[room_id] = {}
+                
+                # Cancel existing timeout if any (shouldn't happen but for safety)
+                if name in inactive_players[room_id]:
+                    if inactive_players[room_id][name].get('timeout_task'):
+                        inactive_players[room_id][name]['timeout_task'].cancel()
+
+                def timeout_player(r_id, p_name):
+                    socketio.sleep(60) # Wait 60 seconds for reconnection
+                    if r_id in inactive_players and p_name in inactive_players[r_id]:
+                        print(f"Player {p_name} timed out from room {r_id}")
+                        del inactive_players[r_id][p_name]
+                        
+                        # Only now really remove them if they haven't reconnected
+                        if r_id in rooms:
+                            # Re-check if they reconnected (their name wouldn't be in inactive if they did)
+                            # Actually delete from room if still not back
+                            r_obj = rooms[r_id]
+                            # If they were host, transfer host
+                            if r_obj['host_sid'] == None and not r_obj['players']:
+                                # Room is truly empty now
+                                platform_stats["active_rooms"] = max(0, platform_stats["active_rooms"] - 1)
+                                emit_admin_update()
+                                rooms.pop(r_id, None)
+                            elif not r_obj['players'] and not inactive_players[r_id]:
+                                # No active players and no one waiting to reconnect
+                                rooms.pop(r_id, None)
+
+                task = socketio.start_background_task(timeout_player, room_id, name)
+                inactive_players[room_id][name] = {
+                    'data': player_data,
+                    'timeout_task': task,
+                    'sid': sid
+                }
+
                 del room['players'][sid]
                 
                 # Analytics: Player Leave
                 platform_stats["current_players_online"] = max(0, platform_stats["current_players_online"] - 1)
                 emit_admin_update()
                 
-                # Assign new host if host disconnected
+                # If host leaves, don't transfer yet, wait for timeout
                 if sid == room['host_sid']:
+                    room['host_sid'] = None 
+                    # We'll assign a new host only if someone else is active OR when this host times out
                     if room['players']:
                         room['host_sid'] = list(room['players'].keys())[0]
-                    else:
-                        room['host_sid'] = None
-                        # Delete room if empty
-                        if room_id in rooms:
-                            rooms[room_id]['turn_version'] = rooms[room_id].get('turn_version', 0) + 1
-                        
-                        # Analytics: Room End
-                        platform_stats["active_rooms"] = max(0, platform_stats["active_rooms"] - 1)
-                        emit_admin_update()
-                        
-                    if room_id is not None:
-                        rooms.pop(room_id, None)
-                        
-                # Remove from turn tracking if game is started
-                if room_id in rooms and room['game_started'] and sid in room['turn_order']:
-                    idx = room['turn_order'].index(sid)
-                    room['turn_order'].remove(sid)
-                    
-                    if not room['turn_order']:
-                        # Everyone left but room remains? Edge case
-                        pass
-                    else:
-                        if idx < room['current_turn_index']:
-                            room['current_turn_index'] -= 1
-                        elif room['current_turn_index'] >= len(room['turn_order']):
-                            room['current_turn_index'] = 0
-                            
-                        # Emit a turn update
-                        current_turn_sid = room['turn_order'][room['current_turn_index']]
-                        current_turn_name = room['players'][current_turn_sid]['name'] if current_turn_sid in room['players'] else 'Unknown'
-                        socketio.emit('turn_changed', {'turn_sid': current_turn_sid, 'turn_name': current_turn_name}, to=room_id)
-            
+
             if room_id in rooms:
                 emit_player_list(room_id)
-                # If it was the disconnected player's turn, the timer should be reset/handled
-                # but start_turn_timer already cancels previous timers.
                 if room['game_started'] and room['turn_order']:
                     start_turn_timer(room_id)
                 
@@ -395,28 +406,38 @@ def on_join_game(data):
     
     room = rooms[room_id]
     
-    # If host disconnected and rejoining as first person (rare, but just in case)
-    if room['host_sid'] is None and not room['players']:
-        room['host_sid'] = sid
-        
-    room['players'][sid] = {
-        'name': name,
-        'board_ready': False,
-        'bingo_lines': 0
-    }
-    
+    # Check for reconnection
+    reconnecting = False
+    if room_id in inactive_players and name in inactive_players[room_id]:
+        print(f"Player {name} reconnecting to room {room_id}")
+        old_data = inactive_players[room_id][name]['data']
+        room['players'][sid] = old_data
+        # If they were host, they might want host back? 
+        # For simplicity, just give it back if no host currently
+        if room['host_sid'] is None:
+            room['host_sid'] = sid
+        del inactive_players[room_id][name]
+        reconnecting = True
+    else:
+        room['players'][sid] = {
+            'name': name,
+            'board_ready': False,
+            'bingo_lines': 0
+        }
+        if name not in room['leaderboard']:
+            room['leaderboard'][name] = 0
+
     # Analytics: Player Join
     platform_stats["total_players_joined"] += 1
     platform_stats["current_players_online"] += 1
     if platform_stats["current_players_online"] > platform_stats["peak_players"]:
         platform_stats["peak_players"] = platform_stats["current_players_online"]
     emit_admin_update()
-    
-    if name not in room['leaderboard']:
-        room['leaderboard'][name] = 0
         
     emit_player_list(room_id)
     emit_leaderboard(room_id)
+    
+    # Send current state specifically to the joining sid
     emit('game_state', {
         'game_started': room['game_started'],
         'called_numbers': room['called_numbers'],
