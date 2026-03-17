@@ -16,7 +16,9 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 # Handle Render's 'postgres://' vs SQLAlchemy's required 'postgresql://'
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+    db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif db_url and db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url or \
     'sqlite:///' + os.path.join(basedir, 'bingo.db')
