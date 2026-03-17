@@ -1,4 +1,10 @@
-const socket = io();
+const socket = io({
+    transports: ['websocket'],
+    upgrade: false,
+    reconnection: true,
+    reconnectionAttempts: 20,
+    reconnectionDelay: 1000
+});
 
 // DOM Elements
 const screens = {
@@ -105,7 +111,7 @@ function showNotification(message, duration = 3000) {
     }
     notifyEl.textContent = message;
     notifyEl.style.opacity = '1';
-    
+
     setTimeout(() => {
         notifyEl.style.opacity = '0';
     }, duration);
@@ -122,7 +128,7 @@ const SoundManager = {
     loss: new Audio('/static/sounds/loss.mp3'),
     notYourTurn: new Audio('/static/sounds/fahhh.mp3'),
     intro: new Audio('/static/sounds/intro.mp3'),
-    
+
     // These will be linked in init() to ensure DOM readiness
     boom1: null,
     boom2: null,
@@ -140,7 +146,7 @@ const SoundManager = {
 
     init() {
         console.log("Initializing SoundManager...");
-        
+
         // Link DOM audio elements
         this.boom1 = document.getElementById('audio-boom1') || new Audio('/static/sounds/boom1.mp3');
         this.boom2 = document.getElementById('audio-boom2') || new Audio('/static/sounds/boom2.mp3');
@@ -405,7 +411,7 @@ const IntroManager = {
 
     async start() {
         console.log("Starting Cinematic Intro...");
-        
+
         // Ensure volumes are maxed for the intro
         SoundManager.boom2.volume = 1.0;
         SoundManager.boom3.volume = 1.0;
@@ -417,7 +423,7 @@ const IntroManager = {
         }
 
         await this.delay(1500); // 1.5s matches text animation
-        
+
         if (this.steps.phase1) {
             this.steps.phase1.classList.replace('active', 'fade-out');
         }
@@ -426,12 +432,12 @@ const IntroManager = {
         if (this.steps.phase2) {
             this.steps.phase2.classList.remove('hidden', 'fade-out');
             this.steps.phase2.classList.add('active');
-            
+
             SoundManager.boom2.play().catch(e => console.warn("Boom2 blocked"));
         }
 
-        await this.delay(3000); 
-        
+        await this.delay(3000);
+
         if (this.steps.phase2) {
             this.steps.phase2.classList.replace('active', 'fade-out');
         }
@@ -440,10 +446,10 @@ const IntroManager = {
         if (this.steps.phase3) {
             this.steps.phase3.classList.remove('hidden');
             this.steps.phase3.classList.add('active');
-            
+
             SoundManager.boom3.play().catch(e => console.warn("Boom3 blocked"));
         }
-        
+
         await this.delay(2000);
 
         // Final Transition to Lobby
@@ -470,7 +476,7 @@ const IntroManager = {
                 // Delay lobby reveal until logo is well into its travel (1000ms)
                 setTimeout(() => {
                     activeScreen.style.opacity = '1';
-                }, 1000); 
+                }, 1000);
             }
 
             // Gradually fade out the intro background/system
@@ -485,7 +491,7 @@ const IntroManager = {
             // Final step: Make the logo part of the scroll flow (matched to 3s travel)
             setTimeout(() => {
                 introBingoLogo.classList.add('final-pos');
-            }, 3050); 
+            }, 3050);
 
         }, 100);
     }
@@ -539,14 +545,14 @@ joinBtn.addEventListener('click', () => {
     if (name && roomCode) {
         localStorage.setItem('bingo_name', name);
         localStorage.setItem('bingo_room', roomCode);
-        
+
         socket.emit('join_game', { name: name, room: roomCode });
         loginPanel.classList.add('hidden');
         lobbyPanel.classList.remove('hidden');
         inviteLink.textContent = window.location.href;
 
         renderQRCode();
-        
+
         lobbyHeaderLogo.classList.remove('hidden');
         lobbyHeaderLogo.style.opacity = "1";
 
@@ -573,6 +579,7 @@ copyLinkBtn.addEventListener('click', () => {
 socket.on('connect', () => {
     myId = socket.id;
     console.log("Connected with ID:", myId);
+    showNotification("Connected to game server", 1500);
     
     // Auto-rejoin if we have room info
     const savedName = localStorage.getItem('bingo_name');
@@ -586,6 +593,18 @@ socket.on('connect', () => {
         lobbyPanel.classList.remove('hidden');
         inviteLink.textContent = window.location.href;
         renderQRCode();
+    }
+});
+
+socket.on('connect_error', (error) => {
+    console.error("Connection error:", error);
+    showNotification("Server connection error. Retrying...", 3000);
+});
+
+socket.on('disconnect', (reason) => {
+    console.warn("Disconnected:", reason);
+    if (reason === "io server disconnect") {
+        socket.connect();
     }
 });
 
@@ -604,7 +623,7 @@ function renderQRCode() {
 socket.on('player_list', (data) => {
     const players = data.players;
     const gameStarted = data.game_started;
-    
+
     console.log("Player List Received:", players, "My SID:", myId);
 
     playerList.innerHTML = '';

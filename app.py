@@ -6,112 +6,49 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 import threading
 import random
 import os
-from flask_sqlalchemy import SQLAlchemy
 from typing import Dict, List, Any, Optional, cast, Tuple
 from itertools import islice
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 
-# Database Configuration
-basedir = os.path.abspath(os.path.dirname(__file__))
-# Handle Render's 'postgres://' vs SQLAlchemy's required 'postgresql://'
-db_url = os.environ.get('DATABASE_URL')
-if db_url and db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
-elif db_url and db_url.startswith("postgresql://"):
-    db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url or \
-    'sqlite:///' + os.path.join(basedir, 'bingo.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
-
-socketio = SocketIO(app, cors_allowed_origins='*', logger=True, engineio_logger=True, async_mode='eventlet')
-
-# Database Models
-class PlatformStat(db.Model):
-    key = db.Column(db.String(50), primary_key=True)
-    value = db.Column(db.Integer, default=0)
-    
-    def __init__(self, key: str, value: int = 0):
-        self.key = key
-        self.value = value
-
-class PlayerWin(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)
-    wins = db.Column(db.Integer, default=0)
-    
-    def __init__(self, name: str, wins: int = 0):
-        self.name = name
-        self.wins = wins
-
-with app.app_context():
-    db.create_all()
-    # Initialize platform stats if they don't exist
-    keys = ["total_rooms_created", "active_rooms", "total_players_joined", 
-            "current_players_online", "total_games_played", "total_rounds_played", "peak_players"]
-    for k in keys:
-        if not PlatformStat.query.filter_by(key=k).first():
-            db.session.add(PlatformStat(key=k, value=0))
-    db.session.commit()
+# Admin Security
+ADMIN_PASSWORD = "dhruv@admin123"
 
 # Admin Security
 ADMIN_PASSWORD = "dhruv@admin123"
 
 # Persistent Data Trackers (Syncs with DB automatically)
-class StatsTracker:
-    def __getitem__(self, key):
-        with app.app_context():
-            stat = PlatformStat.query.filter_by(key=key).first()
-            return stat.value if stat else 0
+# Simple In-Memory Data Trackers
+class StatsTracker(dict):
+    def __init__(self):
+        super().__init__({
+            "total_rooms_created": 0,
+            "active_rooms": 0, 
+            "total_players_joined": 0,
+            "current_players_online": 0,
+            "total_games_played": 0,
+            "total_rounds_played": 0,
+            "peak_players": 0
+        })
     
-    def __setitem__(self, key, value):
-        with app.app_context():
-            stat = PlatformStat.query.filter_by(key=key).first()
-            if stat:
-                stat.value = value
-            else:
-                stat = PlatformStat(key=key, value=value)
-                db.session.add(stat)
-            db.session.commit()
-    
-    def get(self, key, default=0):
-        return self[key]
-
     def to_dict(self):
-        return dict(self.items())
+        return dict(self)
 
-    def items(self):
-        with app.app_context():
-            return [(s.key, s.value) for s in PlatformStat.query.all()]
-
-class LeaderboardTracker:
-    def __getitem__(self, key):
-        with app.app_context():
-            win = PlayerWin.query.filter_by(name=key).first()
-            return win.wins if win else 0
-    
-    def __setitem__(self, key, value):
-        with app.app_context():
-            win = PlayerWin.query.filter_by(name=key).first()
-            if win:
-                win.wins = value
-            else:
-                win = PlayerWin(name=key, wins=value)
-                db.session.add(win)
-            db.session.commit()
-    
+class LeaderboardTracker(dict):
     def get(self, key, default=0):
-        return self[key]
-    
-    def items(self):
-        with app.app_context():
-            return [(w.name, w.wins) for w in PlayerWin.query.all()]
+        return super().get(key, default)
 
 platform_stats = StatsTracker()
 global_leaderboard = LeaderboardTracker()
+
+socketio = SocketIO(app, 
+                    cors_allowed_origins='*', 
+                    logger=True, 
+                    engineio_logger=True, 
+                    async_mode='eventlet',
+                    ping_timeout=60,
+                    ping_interval=25)
 
 # Current Session Data
 rooms: Dict[str, Any] = {}
