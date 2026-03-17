@@ -228,7 +228,9 @@ def on_select_grid_size(data):
                 '5': (5, 25),
                 '6': (6, 36),
                 '7': (7, 49),
-                '8': (8, 64)
+                '8': (8, 64),
+                '9': (9, 81),
+                '10': (10, 100)
             }
             grid_size_str = str(data.get('size'))
             if grid_size_str in size_map:
@@ -368,6 +370,24 @@ def on_end_session(data):
         if room_id in rooms:
             rooms[room_id]['turn_version'] = rooms[room_id].get('turn_version', 0) + 1
         del rooms[room_id]
+
+# @socketio.on('send_message')
+# def on_send_message(data):
+#     sid = request.sid
+#     room_id = sid_to_room.get(sid)
+#     if not room_id or room_id not in rooms: return
+#     
+#     room = rooms[room_id]
+#     if sid in room['players']:
+#         name = room['players'][sid]['name']
+#         message = data.get('message', '').strip()
+#         if message:
+#             emit('receive_message', {
+#                 'name': name,
+#                 'message': message,
+#                 'sid': sid,
+#                 'type': 'user'
+#             }, to=room_id)
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=5000)

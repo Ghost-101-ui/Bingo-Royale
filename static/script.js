@@ -27,9 +27,10 @@ const copyLinkBtn = document.getElementById('copy-link-btn');
 const qrcodeContainer = document.getElementById('qrcode-container');
 
 // Intro Transition UI
-const introOverlay = document.getElementById('intro-overlay');
-const introLogo = document.getElementById('intro-logo');
-const lobbyHeaderLogo = document.getElementById('lobby-header-logo');
+const introContainer = document.getElementById('intro-container');
+const introBingoLogo = document.getElementById('intro-bingo-logo');
+// Note: lobbyHeaderLogo is now an alias for the persistent animated logo
+const lobbyHeaderLogo = introBingoLogo;
 
 // Setup UI
 const numberPalette = document.getElementById('number-palette');
@@ -64,6 +65,22 @@ const bgmToggle = document.getElementById('bgm-toggle');
 const mode18Toggle = document.getElementById('mode-18-toggle');
 const bgmVolumeSlider = document.getElementById('bgm-volume');
 const sfxVolumeSlider = document.getElementById('sfx-volume');
+/* 
+const chatToggleBtn = document.getElementById('chat-toggle-btn');
+const chatContainer = document.getElementById('chat-container');
+const closeChatBtn = document.getElementById('close-chat-btn');
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const sendChatBtn = document.getElementById('send-chat-btn');
+const chatBadge = document.getElementById('chat-badge');
+const sidebarMessages = document.getElementById('sidebar-messages');
+const sidebarChatInput = document.getElementById('sidebar-chat-input');
+const sidebarSendBtn = document.getElementById('sidebar-send-btn');
+const topChatBtn = document.getElementById('top-chat-btn');
+const topChatBadge = document.getElementById('top-chat-badge');
+const floatingChatBtn = document.getElementById('floating-chat-btn');
+const floatingChatBadge = document.getElementById('floating-chat-badge');
+*/
 
 // State
 let myId = null;
@@ -78,6 +95,10 @@ let bingoLines = 0;
 let currentTurnSid = null;
 let turnTimerInterval = null;
 let timeLeft = 20;
+/* 
+let chatUnreadCount = 0;
+let isChatOpen = false; 
+*/
 
 // Sound Manager
 const SoundManager = {
@@ -89,6 +110,7 @@ const SoundManager = {
     win: new Audio('/static/sounds/win.mp3'),
     loss: new Audio('/static/sounds/loss.mp3'),
     notYourTurn: new Audio('/static/sounds/fahhh.mp3'),
+    intro: new Audio('/static/sounds/intro.mp3'),
 
     // 18+ Mode sounds
     win18: new Audio('/static/sounds/bete-win.mp3'),
@@ -142,6 +164,7 @@ const SoundManager = {
         this.win18.volume = this.sfxVolume;
         this.loss18.volume = this.sfxVolume;
         this.btnClick18.volume = this.sfxVolume;
+        this.intro.volume = this.sfxVolume;
     },
 
     setBgmVolume(val) {
@@ -358,6 +381,243 @@ function showNotification(msg) {
     }, 3000);
 }
 
+// ==========================================
+// CHAT LOGIC
+// ==========================================
+
+/* 
+function toggleChat() {
+    isChatOpen = !isChatOpen;
+    if (isChatOpen) {
+        chatContainer.classList.remove('hidden');
+        chatUnreadCount = 0;
+        updateChatBadge();
+        chatInput.focus();
+    } else {
+        chatContainer.classList.add('hidden');
+    }
+}
+*/
+
+/* 
+function updateChatBadge() {
+    if (chatUnreadCount > 0 && !isChatOpen) {
+        const badges = [chatBadge, topChatBadge, floatingChatBadge];
+        badges.forEach(badge => {
+            if (badge) {
+                badge.textContent = chatUnreadCount;
+                badge.classList.remove('hidden');
+            }
+        });
+    } else {
+        const badges = [chatBadge, topChatBadge, floatingChatBadge];
+        badges.forEach(badge => {
+            if (badge) badge.classList.add('hidden');
+        });
+    }
+}
+*/
+
+/* 
+function sendChatMessage(inputType = 'floating') {
+    const input = inputType === 'sidebar' ? sidebarChatInput : chatInput;
+    const message = input.value.trim();
+    if (message) {
+        socket.emit('send_message', { message: message, room: roomCode });
+        input.value = '';
+    }
+}
+*/
+
+/* 
+function appendMessage(data) {
+    const isSelf = data.sid === socket.id;
+    
+    // Create element for floating chat
+    const msgEl = document.createElement('div');
+    msgEl.className = `message ${isSelf ? 'message-self' : 'message-user'}`;
+    msgEl.innerHTML = `
+        ${!isSelf ? `<span class="message-sender">${data.name}</span>` : ''}
+        <span class="message-text">${data.message}</span>
+    `;
+    
+    chatMessages.appendChild(msgEl);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // Create a clone for the sidebar chat
+    if (sidebarMessages) {
+        const sidebarMsgEl = msgEl.cloneNode(true);
+        sidebarMessages.appendChild(sidebarMsgEl);
+        sidebarMessages.scrollTop = sidebarMessages.scrollHeight;
+    }
+    
+    if (!isChatOpen && !isSelf) {
+        chatUnreadCount++;
+        updateChatBadge();
+    }
+}
+*/
+
+/* 
+if (chatToggleBtn) {
+    chatToggleBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        toggleChat();
+    });
+}
+
+if (topChatBtn) {
+    topChatBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        toggleChat();
+    });
+}
+
+if (floatingChatBtn) {
+    floatingChatBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        toggleChat();
+    });
+}
+
+if (closeChatBtn) {
+    closeChatBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        SoundManager.playBtnClick();
+        toggleChat();
+    });
+}
+
+if (sendChatBtn) {
+    sendChatBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        sendChatMessage();
+    });
+}
+
+if (chatInput) {
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            SoundManager.playBtnClick();
+            sendChatMessage('floating');
+        }
+    });
+}
+
+// Sidebar Chat Listeners
+if (sidebarSendBtn) {
+    sidebarSendBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        sendChatMessage('sidebar');
+    });
+}
+
+if (sidebarChatInput) {
+    sidebarChatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            SoundManager.playBtnClick();
+            sendChatMessage('sidebar');
+        }
+    });
+}
+
+socket.on('receive_message', (data) => {
+    appendMessage(data);
+});
+*/
+
+// ==========================================
+// CINEMATIC INTRO LOGIC
+// ==========================================
+
+const IntroManager = {
+    steps: {
+        presents: document.getElementById('step-presents'),
+        logo: document.getElementById('step-logo')
+    },
+
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    },
+
+    async start() {
+        console.log("Starting Cinematic Intro...");
+
+        // Step 1: Dark Screen (Already handled by CSS initial state)
+        await this.delay(500);
+
+        // Step 2: CyberEDT Games presents
+        this.steps.presents.classList.remove('hidden');
+        this.steps.presents.classList.add('active');
+        await this.delay(3000); // Duration matches animation
+        this.steps.presents.classList.remove('active');
+        await this.delay(1000);
+
+        // Step 3: CyberEDT Logo + Sound
+        this.steps.logo.classList.remove('hidden');
+        this.steps.logo.classList.add('active');
+        SoundManager.intro.play().catch(e => console.log("Intro audio blocked"));
+
+        await this.delay(5000); // Cinematic zoom duration
+        
+        // Step 4: Fade Out CyberEDT (Transition to next step)
+        this.steps.logo.classList.add('fade-out');
+        await this.delay(1000); // Brief dark pause for anticipation
+        
+        // Step 5: BINGO ROYALE Logo Cinematic Reveal
+        introBingoLogo.classList.remove('hidden');
+        // Add active class immediately; animation handles the rest
+        introBingoLogo.classList.add('active');
+        
+        await this.delay(4000); // Display time for title
+
+        // Step 6 & 7: Transition to Lobby
+        this.transitionToLobby();
+    },
+
+    transitionToLobby() {
+        console.log("Transitioning to Lobby...");
+
+        // Move logo to its header position
+        introContainer.classList.add('lobby-transition');
+        introBingoLogo.classList.add('transitioning');
+
+        // Allow a small beat before starting the move and UI fade
+        setTimeout(() => {
+            introBingoLogo.classList.add('header-pos');
+
+            // Stagger the fade-in of the main game UI
+            const activeScreen = document.querySelector('.screen.view-active');
+            if (activeScreen) {
+                activeScreen.classList.remove('hidden');
+                activeScreen.style.opacity = '0';
+                activeScreen.style.transition = 'opacity 1s ease-in-out';
+
+                // Delay screen fade-in until logo has started moving
+                setTimeout(() => {
+                    activeScreen.style.opacity = '1';
+                }, 300);
+            }
+
+            // Gradually fade out the intro background/system
+            setTimeout(() => {
+                introContainer.style.opacity = '0';
+                setTimeout(() => {
+                    introContainer.classList.add('hidden');
+                    // Reset opacity for potential future use or just cleanup
+                    introContainer.style.opacity = '1';
+                }, 1000);
+            }, 600);
+
+            // Final step: Make the logo part of the scroll flow instead of fixed
+            setTimeout(() => {
+                introBingoLogo.classList.add('final-pos');
+            }, 1000); 
+
+        }, 50);
+    }
+};
+
 // Initial Screen Routing
 if (roomCode) {
     roomCode = roomCode.toUpperCase();
@@ -366,6 +626,11 @@ if (roomCode) {
 } else {
     showScreen('landing');
 }
+
+// Start Intro
+window.addEventListener('load', () => {
+    IntroManager.start();
+});
 
 // ==========================================
 // LANDING LOGIC
@@ -394,13 +659,16 @@ modeBtns.forEach(btn => {
 // LOBBY LOGIC
 // ==========================================
 
+// Trigger audio on pointerdown for instant low-latency feedback instead of waiting for click release
+joinBtn.addEventListener('pointerdown', () => {
+    SoundManager.playJoin();
+});
+
 joinBtn.addEventListener('click', () => {
-    SoundManager.playJoin(); // Instant audio feedback
-    
     const name = nameInput.value.trim();
     if (name && roomCode) {
         socket.emit('join_game', { name: name, room: roomCode });
-        
+
         /* 
         // --- TEMPORARILY DISABLED INTRO ---
         introOverlay.style.background = '#0b1b3b'; 
@@ -442,16 +710,16 @@ joinBtn.addEventListener('click', () => {
         loginPanel.classList.add('hidden');
         lobbyPanel.classList.remove('hidden');
         inviteLink.textContent = window.location.href;
-        
+
         // Generate QR Code
         qrcodeContainer.innerHTML = '';
         new QRCode(qrcodeContainer, {
             text: window.location.href,
             width: 156,
             height: 156,
-            colorDark : "#000000",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.L
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.L
         });
         lobbyHeaderLogo.classList.remove('hidden');
         lobbyHeaderLogo.style.opacity = "1";
@@ -765,14 +1033,14 @@ socket.on('turn_changed', (data) => {
         turnText.className = '';
         gameBoard.classList.remove('my-turn');
     }
-    
+
     startClientTimer();
 });
 
 function startClientTimer() {
     clearInterval(turnTimerInterval);
     timeLeft = 20;
-    
+
     if (turnTimerEl) {
         turnTimerEl.classList.remove('hidden', 'low-time');
         turnTimerEl.textContent = timeLeft;
