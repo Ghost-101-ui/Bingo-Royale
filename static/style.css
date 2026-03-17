@@ -75,10 +75,22 @@ h6 {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start; /* Group elements from the top */
     padding: 20px;
-    margin-top: 210px;
-    /* Adjusted to fit the 0.8 scale logo */
+    margin-top: 200px; /* Increased desktop margin */
+    transition: margin-top 0.3s ease;
+}
+
+@media (max-width: 992px) {
+    .screen { margin-top: 160px; }
+}
+
+@media (max-width: 768px) {
+    .screen { margin-top: 130px; }
+}
+
+@media (max-width: 480px) {
+    .screen { margin-top: 110px; padding: 10px; }
 }
 
 .card {
@@ -352,11 +364,21 @@ h6 {
 
 .intro-logo-center.header-pos {
     top: 70px;
-    /* Relaxed top spacing for the slight reduction */
     transform: translate(-50%, 0) scale(0.8);
-    /* Reduced by 0.2 from full size */
     animation: none;
-    /* Ensure no sweep animations override the scale */
+    transition: all 0.5s ease;
+}
+
+@media (max-width: 992px) {
+    .intro-logo-center.header-pos { top: 50px; transform: translate(-50%, 0) scale(0.65); }
+}
+
+@media (max-width: 768px) {
+    .intro-logo-center.header-pos { top: 40px; transform: translate(-50%, 0) scale(0.55); }
+}
+
+@media (max-width: 480px) {
+    .intro-logo-center.header-pos { top: 60px; transform: translate(-50%, 0) scale(0.4); }
 }
 
 .intro-logo-center.final-pos {
@@ -576,6 +598,16 @@ button:disabled {
     display: flex;
     gap: 15px;
     z-index: 1001;
+    transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .top-controls { top: 20px; left: 20px; gap: 10px; }
+}
+
+@media (max-width: 480px) {
+    .top-controls { top: 15px; left: 15px; }
+    .top-controls .icon-toggle-btn { padding: 6px 12px; font-size: 0.75rem; }
 }
 
 .top-controls .icon-toggle-btn {
@@ -1528,15 +1560,18 @@ input:checked+.slider:before {
 /* Footer Credits */
 .app-footer {
     width: 100%;
-    padding: 2rem 1rem;
+    padding: 1.5rem 1rem;
     margin-top: auto;
-    /* Pushes footer to bottom of flex container */
     text-align: center;
     color: var(--text-muted);
     font-family: 'Poppins', sans-serif;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     letter-spacing: 1px;
     opacity: 0.8;
+}
+
+@media (max-width: 480px) {
+    .app-footer { padding: 1rem 0.5rem; font-size: 0.75rem; }
 }
 
 .app-footer p {
