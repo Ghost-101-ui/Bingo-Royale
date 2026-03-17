@@ -143,11 +143,6 @@ const SoundManager = {
         this.bgMusic.loop = true;
         this.loss18.loop = true; // Loop the 18+ loss sound as requested
         this.updateVolumes();
-
-        // When join-room finishes, wait 0.5s before kicking off BG music
-        this.joinRoom.addEventListener('ended', () => {
-            this.playBgMusic(500);
-        });
     },
 
     updateVolumes() {
@@ -662,6 +657,7 @@ modeBtns.forEach(btn => {
 // Trigger audio on pointerdown for instant low-latency feedback instead of waiting for click release
 joinBtn.addEventListener('pointerdown', () => {
     SoundManager.playJoin();
+    SoundManager.playBgMusic(0); // Instantly play background music without delay
 });
 
 joinBtn.addEventListener('click', () => {

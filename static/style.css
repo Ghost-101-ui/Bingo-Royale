@@ -77,8 +77,8 @@ h6 {
     align-items: center;
     justify-content: center;
     padding: 20px;
-    margin-top: 300px;
-    /* Adjusted for the larger header logo */
+    margin-top: 210px;
+    /* Adjusted to fit the 0.8 scale logo */
 }
 
 .card {
@@ -291,7 +291,7 @@ h6 {
     }
 
     100% {
-        transform: translate(-50%, -50%) scale(1);
+        transform: translate(-50%, -50%) scale(0.8);
         opacity: 1;
         filter: blur(0);
     }
@@ -351,10 +351,10 @@ h6 {
 }
 
 .intro-logo-center.header-pos {
-    top: 110px;
-    /* Slightly higher for better content spacing */
-    transform: translate(-50%, 0) scale(0.60);
-    /* Increased scale as requested for better visibility */
+    top: 70px;
+    /* Relaxed top spacing for the slight reduction */
+    transform: translate(-50%, 0) scale(0.8);
+    /* Reduced by 0.2 from full size */
     animation: none;
     /* Ensure no sweep animations override the scale */
 }
