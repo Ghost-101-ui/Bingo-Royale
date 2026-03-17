@@ -4,8 +4,7 @@
 [![Flask](https://img.shields.io/badge/Flask-2.x-lightgrey?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
 [![Socket.io](https://img.shields.io/badge/Socket.io-4.x-black?logo=socket.io&logoColor=white)](https://socket.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-A **premium, real-time multiplayer Bingo game** designed for LAN play. Host a game on your laptop and have your friends join instantly by scanning a QR code on their phones!
+A **premium, real-time multiplayer Bingo game** playable online. Play using a host-client model—anyone can host a game from their phone, tablet, or PC, and friends can join instantly via an invite link or by scanning a QR code!
 
 ---
 
