@@ -42,6 +42,7 @@ Play Bingo Royale instantly with your friends online:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+IT COMES UNDER CyberEDT Ecosystem.
 ---
 
 Created with ❤️ by [Ghost-101-ui](https://github.com/Ghost-101-ui)
