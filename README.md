@@ -9,44 +9,24 @@ A **premium, real-time multiplayer Bingo game** designed for LAN play. Host a ga
 
 ---
 
-## ✨ Features
+## 🔗 Live Version
 
-- 🎮 **Real-time Multiplayer**: Powered by WebSockets (Socket.io) for instantaneous number syncing.
-- 🏠 **Private Game Rooms**: Create unique rooms and share invite links easily.
-- 📷 **QR Code Join**: Scan a generated QR code on the host's screen to join the lobby instantly.
-- 🎯 **Turn-Based Calling**: Players take turns picking numbers to complete their boards.
-- 🕵️ **Suspense Mode**: Opponent line counts are hidden (`? Lines`) to keep the competition intense!
-- 🎨 **Modern UI**: Dark gaming theme with smooth animations and responsive design.
-- 📏 **Dynamic Board Sizes**: Hosts can choose between 5x5, 6x6, 7x7, or 8x8 grids to customize game length and difficulty!
-- 🔄 **Play Again**: Seamlessly restart matches from the game lobby without participants needing to rejoin or reload their browsers.
-- ⚡ **Auto-Fill**: One-click random board generation for quick starts.
+Play Bingo Royale instantly with your friends online:
+**[🎮 Play Bingo Royale Now!](https://bingo4class.onrender.com)**
 
 ---
 
-## 🚀 Quick Start
+## ✨ Features
 
-### 1. Prerequisites
-Ensure you have **Python 3.8+** installed on your machine.
-
-### 2. Installation
-Clone the repository and install the dependencies:
-```bash
-git clone https://github.com/Ghost-101-ui/Bingo-Royale.git
-cd Bingo-Royale
-python -m venv venv
-source venv/bin/activate  # On Windows: .\venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 3. Run the Server
-```bash
-python app.py
-```
-The server will start on `http://0.0.0.0:5000`. 
-
-### 4. Join the Game
-- **Host**: Open `http://localhost:5000` in your browser.
-- **Players**: Connect to the same Wi-Fi as the host and scan the QR code displayed in the Lobby, or visit `http://HOST_IP:5000`.
+- 🎮 **Real-time Multiplayer**: Powered by WebSockets (Socket.io) for instantaneous number syncing.
+- 🎬 **Cinematic Experience**: Immersive, fully animated game intro and premium UI.
+- 🏠 **Private Game Rooms**: Create unique rooms, copy invite links, or join via QR code.
+- 📏 **Dynamic Board Sizes**: Hosts can choose from **5x5 up to massive 10x10 grids** to customize game length and difficulty!
+- 🔊 **Custom Audio Engine**: Adjustable BGM/SFX sliders, instant low-latency sound feedback.
+- 🔞 **18+ Sound Mode**: Toggle alternative, comedic sound effects for private group sessions.
+- 🕵️ **Suspense Mode**: Opponent line counts are hidden (`? Lines`) to keep the competition intense!
+- ⚡ **Auto-Fill**: One-click random board generation for quick starts.
+- 🔄 **Play Again**: Seamlessly restart matches from the game lobby without players needing to rejoin.
 
 ---
 
