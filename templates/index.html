@@ -140,14 +140,13 @@
                             <button class="secondary-btn mode-btn" data-size="6">6x6</button>
                             <button class="secondary-btn mode-btn" data-size="7">7x7</button>
                             <button class="secondary-btn mode-btn" data-size="8">8x8</button>
-                            <button class="secondary-btn mode-btn" data-size="9">9x9</button>
-                            <button class="secondary-btn mode-btn" data-size="10">10x10</button>
                         </div>
                     </div>
                     <p id="waiting-msg" class="waiting-text">Waiting for host to start...</p>
                     <div class="btn-row">
                         <button id="start-game-btn" class="primary-btn pulse-btn hidden">Start Game</button>
                         <button id="setup-board-btn" class="secondary-btn">Setup My Board</button>
+                        <button id="change-name-btn" class="secondary-btn">Change Name</button>
                     </div>
                 </div>
             </div>
@@ -229,10 +228,27 @@
             </div>
         </div>
 
-        <!-- Footer Credits -->
-        <footer class="app-footer">
-            <p>Developed with ❤️ by Dhruv Patel </p>
-        </footer>
+        <!-- VOTE TO KICK OVERLAY -->
+        <div id="vote-overlay" class="overlay hidden">
+            <div class="vote-card zoom-in">
+                <h2 class="vote-title">Vote to Kick</h2>
+                <p id="vote-msg" class="vote-msg">Kick Player?</p>
+                <div class="vote-actions btn-row">
+                    <button id="vote-yes-btn" class="primary-btn">Yes (Kick)</button>
+                    <button id="vote-no-btn" class="secondary-btn">No (Keep)</button>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- End app-container -->
+    
+    <!-- KICK PUNISHMENT OVERLAY - MOVED OUTSIDE FOR VISIBILITY -->
+    <div id="kick-punishment-overlay" class="overlay hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999; background: #000; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+        <div class="zoom-in text-center" style="width: 100%; max-width: 600px; padding: 20px;">
+            <h1 style="color: var(--danger); font-size: 3rem; text-transform: uppercase; margin-bottom: 2rem; font-weight: 900; text-shadow: 0 0 20px rgba(239, 68, 68, 0.8);">YOU HAVE BEEN KICKED!</h1>
+            <img src="/static/gif/kick.gif" alt="Kicked Out GIF" style="width: 100%; max-width: 400px; border-radius: 10px; border: 4px solid var(--danger); box-shadow: 0 0 30px rgba(239, 68, 68, 0.5);">
+            <p style="color: #fff; font-size: 1.5rem; margin-top: 2rem; opacity: 0.8;">Close the tab to escape your punishment.</p>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>

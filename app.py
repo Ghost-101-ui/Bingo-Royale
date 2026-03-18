@@ -22,7 +22,8 @@ ADMIN_PASSWORD = "dhruv@admin123"
 # Simple In-Memory Data Trackers
 class StatsTracker(dict):
     def __init__(self):
-        super().__init__({
+        super().__init__()
+        self.update({
             "total_rooms_created": 0,
             "active_rooms": 0, 
             "total_players_joined": 0,
@@ -33,11 +34,12 @@ class StatsTracker(dict):
         })
     
     def to_dict(self):
-        return dict(self)
+        return {k: v for k, v in self.items()}
 
 class LeaderboardTracker(dict):
-    def get(self, key, default=0):
-        return super().get(key, default)
+    def get_wins(self, key):
+        val = self.get(key, 0)
+        return int(val) if val is not None else 0
 
 platform_stats = StatsTracker()
 global_leaderboard = LeaderboardTracker()
@@ -85,7 +87,7 @@ def admin_dashboard():
     total_games = platform_stats.get('total_games_played', 0)
     total_rounds = platform_stats.get('total_rounds_played', 0)
     if total_games > 0:
-        avg_rounds = round(float(total_rounds) / total_games, 2)
+        avg_rounds = float("{:.2f}".format(float(total_rounds) / total_games))
     
     # Sort global leaderboard
     leaderboard_items: List[Tuple[str, int]] = list(global_leaderboard.items())
@@ -183,7 +185,7 @@ def handle_disconnect():
                     socketio.sleep(60) # Wait 60 seconds for reconnection
                     if r_id in inactive_players and p_name in inactive_players[r_id]:
                         print(f"Player {p_name} timed out from room {r_id}")
-                        del inactive_players[r_id][p_name]
+                        inactive_players[r_id].pop(p_name, None)
                         
                         # Only now really remove them if they haven't reconnected
                         if r_id in rooms:
@@ -207,7 +209,7 @@ def handle_disconnect():
                     'sid': sid
                 }
 
-                del room['players'][sid]
+                room['players'].pop(sid, None)
                 
                 # Analytics: Player Leave
                 platform_stats["current_players_online"] = max(0, platform_stats["current_players_online"] - 1)
@@ -292,14 +294,32 @@ def emit_player_list(room_id):
         return
     room = rooms[room_id]
     player_data = []
+    
+    # Active players
     for sid, data in room['players'].items():
         player_data.append({
             'id': sid,
             'name': data['name'],
             'is_host': sid == room['host_sid'],
             'board_ready': data['board_ready'],
-            'bingo_lines': data['bingo_lines']
+            'bingo_lines': data['bingo_lines'],
+            'is_online': True
         })
+    
+    # Inactive/Offline players
+    if room_id in inactive_players:
+        for name, data in inactive_players[room_id].items():
+            # Check if this name is already in active players (should not be, but for safety)
+            if not any(p['name'] == name for p in player_data):
+                player_data.append({
+                    'id': None,
+                    'name': name,
+                    'is_host': data['sid'] == room['host_sid'],
+                    'board_ready': data['data']['board_ready'],
+                    'bingo_lines': data['data']['bingo_lines'],
+                    'is_online': False
+                })
+
     socketio.emit('player_list', {'players': player_data, 'game_started': room['game_started']}, to=room_id)
 
 def emit_leaderboard(room_id):
@@ -334,7 +354,8 @@ def on_join_game(data):
             'max_number': 25,
             'leaderboard': {},
             'round_won': False,
-            'created_at': int(time.time())
+            'created_at': int(time.time()),
+            'active_vote': None
         }
         # Analytics: Room Create
         platform_stats["total_rooms_created"] += 1
@@ -353,9 +374,13 @@ def on_join_game(data):
         # For simplicity, just give it back if no host currently
         if room['host_sid'] is None:
             room['host_sid'] = sid
-        del inactive_players[room_id][name]
+        inactive_players[room_id].pop(name, None)
         reconnecting = True
     else:
+        if len(room['players']) >= room.get('grid_size', 5):
+            emit('room_full', {'message': f"Room is full! Maximum {room.get('grid_size', 5)} players allowed."}, to=sid)
+            return
+
         room['players'][sid] = {
             'name': name,
             'board_ready': False,
@@ -404,13 +429,16 @@ def on_select_grid_size(data):
                     '5': (5, 25),
                     '6': (6, 36),
                     '7': (7, 49),
-                    '8': (8, 64),
-                    '9': (9, 81),
-                    '10': (10, 100)
+                    '8': (8, 64)
                 }
                 grid_size_str = str(data.get('size'))
                 if grid_size_str in size_map:
                     grid_size, max_number = size_map[grid_size_str]
+                    
+                    if len(room['players']) > grid_size:
+                        socketio.emit('error', {'message': f'Cannot select {grid_size}x{grid_size} mode. Room currently has {len(room["players"])} players.'}, to=sid)
+                        return
+
                     room['grid_size'] = grid_size
                     room['max_number'] = max_number
                     
@@ -465,7 +493,7 @@ def on_start_game(data):
 def on_call_number(data):
     sid = request.sid
     r_id = sid_to_room.get(sid)
-    if r_id and r_id in rooms:
+    if r_id is not None and r_id in rooms:
         room = rooms[r_id]
         if room['game_started']:
             if not room['turn_order']: return
@@ -511,7 +539,7 @@ def on_bingo_update(data):
                     room['leaderboard'][winner_name] = room['leaderboard'].get(winner_name, 0) + 1
                     
                     # Analytics: Global Leaderboard
-                    global_leaderboard[winner_name] = global_leaderboard.get(winner_name, 0) + 1
+                    global_leaderboard[winner_name] = global_leaderboard.get_wins(winner_name) + 1
                     emit_admin_update()
                     
                     emit_leaderboard(r_id)
@@ -560,6 +588,240 @@ def on_end_session(data):
                 platform_stats["active_rooms"] = max(0, platform_stats["active_rooms"] - 1)
                 emit_admin_update()
             rooms.pop(room_id, None)
+
+@socketio.on('change_name')
+def on_change_name(data):
+    sid = request.sid
+    new_name = data.get('new_name', '').strip()
+    room_id = sid_to_room.get(sid)
+    
+    if not new_name or not room_id or room_id not in rooms:
+        return
+        
+    if len(new_name) > 15:
+        new_name = new_name[:15]
+        
+    room = rooms[cast(str, room_id)]
+    if sid not in room['players']:
+        return
+        
+    old_name = room['players'][sid]['name']
+    if old_name == new_name:
+        return
+        
+    # Update player name
+    room['players'][sid]['name'] = new_name
+    
+    # Migrate leaderboard stats
+    if old_name in room['leaderboard']:
+        stats = room['leaderboard'].pop(old_name)
+        # Check if anyone else is still using the old name
+        others_with_old_name = any(p['name'] == old_name for p_sid, p in room['players'].items() if p_sid != sid)
+        if others_with_old_name:
+            # Put stats back for others
+            room['leaderboard'][old_name] = stats
+        
+        # Add stats to new name (or merge if new name exists)
+        room['leaderboard'][new_name] = room['leaderboard'].get(new_name, 0) + (stats if not others_with_old_name else 0)
+        # Note: if others_with_old_name is true, we didn't "move" the stats, just copied or shared.
+        # This logic is a bit tricky since stats are shared by name.
+        # Simpler approach: if stats were for this name, and name changes, 
+        # just ensure new name has an entry. 
+    
+    if new_name not in room['leaderboard']:
+        room['leaderboard'][new_name] = 0
+
+    emit_player_list(room_id)
+    emit_leaderboard(room_id)
+    emit('name_changed', {'new_name': new_name}, to=sid)
+
+@socketio.on('initiate_kick_vote')
+def on_initiate_kick_vote(data):
+    sid = request.sid
+    target_name = data.get('target_name')
+    target_sid = data.get('target_sid')
+    room_id = sid_to_room.get(sid)
+    
+    if not room_id or room_id not in rooms:
+        return
+        
+    room = rooms[room_id]
+    if sid != room['host_sid']:
+        return # Only host can initiate
+        
+    if room.get('active_vote'):
+        return # Already a vote in progress
+
+    # Find total voters (everyone except the target)
+    voters = []
+    if target_sid:
+        voters = [p_sid for p_sid in room['players'] if p_sid != target_sid]
+    else:
+        voters = [p_sid for p_sid in room['players']]
+    if not voters:
+        # If no one else is online, host can just kick directly if it's an offline player?
+        # But we'll follow the rule of "all others vote". 
+        # For now, let's allow it if there's at least 1 other voter.
+        pass
+
+    room['active_vote'] = {
+        'target_name': target_name,
+        'target_sid': target_sid,
+        'votes': {sid: 'yes'}, # Host automatically votes yes
+        'start_time': time.time()
+    }
+    
+    socketio.emit('kick_vote_started', {
+        'target_name': target_name,
+        'initiator_name': room['players'].get(sid, {}).get('name', 'Host')
+    }, to=room_id)
+    
+    # Auto-end vote after 5 seconds
+    def vote_timeout(r_id):
+        socketio.sleep(5)
+        if r_id in rooms and rooms[r_id].get('active_vote'):
+            process_vote(r_id, timeout=True)
+            
+    socketio.start_background_task(vote_timeout, room_id)
+
+@socketio.on('submit_kick_vote')
+def on_submit_kick_vote(data):
+    sid = request.sid
+    vote = data.get('vote') # 'yes' or 'no'
+    room_id = sid_to_room.get(sid)
+    
+    if not room_id or room_id not in rooms:
+        return
+        
+    room = rooms[room_id]
+    if not room.get('active_vote'):
+        return
+        
+    active_vote = room['active_vote']
+    if sid == active_vote['target_sid']:
+        return # Target can't vote
+        
+    active_vote['votes'][sid] = vote
+    process_vote(room_id)
+
+def process_vote(room_id, timeout=False):
+    if room_id not in rooms:
+        return
+    room = rooms[room_id]
+    vote_data = room.get('active_vote')
+    if not vote_data:
+        return
+        
+    total_active_players = len(room['players'])
+    # Other players = total - (1 if target is online else 0)
+    target_online = vote_data['target_sid'] in room['players']
+    voter_pool_size = total_active_players - (1 if target_online else 0)
+    
+    yes_votes = list(vote_data['votes'].values()).count('yes')
+    no_votes = list(vote_data['votes'].values()).count('no')
+    
+    # Needs > 50% of the voter pool to say yes
+    # Or if everyone has voted, or if timeout
+    passed = False
+    if voter_pool_size > 0:
+        if yes_votes > voter_pool_size / 2:
+            passed = True
+        elif no_votes >= voter_pool_size / 2:
+            passed = False
+            # Vote failed early
+            end_vote(room_id, False)
+            return
+
+    # End early only if everyone has voted
+    if yes_votes + no_votes >= voter_pool_size:
+        end_vote(room_id, yes_votes > voter_pool_size / 2)
+    elif timeout:
+        # On timeout, tally what we have
+        end_vote(room_id, yes_votes > voter_pool_size / 2)
+
+def end_vote(room_id, passed):
+    if room_id not in rooms:
+        return
+    room = rooms[room_id]
+    vote_data = room.pop('active_vote', None)
+    if not vote_data:
+        return
+        
+    target_name = vote_data['target_name']
+    target_sid = vote_data['target_sid']
+    
+    socketio.emit('kick_vote_ended', {
+        'target_name': target_name,
+        'passed': passed
+    }, to=room_id)
+    
+    if passed:
+        kick_player(room_id, target_sid, target_name)
+
+def kick_player(room_id, sid, name):
+    if room_id not in rooms:
+        return
+    room = rooms[room_id]
+    
+    print(f"Kicking player {name} (sid: {sid}) from room {room_id}")
+    
+    # If online
+    if sid and sid in room['players']:
+        socketio.emit('kicked', {'reason': 'You have been voted out.'}, to=sid)
+        # The disconnect handler will take care of a lot, but we want to ensure they are GONE
+        # and not moved to inactive.
+        room['players'].pop(sid, None)
+        platform_stats["current_players_online"] = max(0, platform_stats["current_players_online"] - 1)
+        emit_admin_update()
+        
+        # If they were host, transfer (host usually won't be kicked but just in case of future changes)
+        if sid == room['host_sid']:
+            room['host_sid'] = list(room['players'].keys())[0] if room['players'] else None
+            
+        # Ensure they don't stay in sid_to_room or inactive_players
+        sid_to_room.pop(sid, None)
+        # Use name to prevent them from "reconnecting"
+        if room_id in inactive_players:
+            inactive_players[room_id].pop(name, None)
+            
+    # If offline
+    if room_id in inactive_players and name in inactive_players[room_id]:
+        inactive_players[room_id].pop(name, None)
+        
+    emit_player_list(room_id)
+    
+    # If it was their turn, skip it
+    if room['game_started'] and room['turn_order']:
+        if sid in room['turn_order']:
+            # Actually we need to rebuild turn order or handle the index
+            # Simplest: rebuild turn order from current active players
+            active_sids = list(room['players'].keys())
+            new_turn_order = [s for s in room['turn_order'] if s in active_sids]
+            
+            if not new_turn_order:
+                # No one left?
+                return
+                
+            # Adjust index if necessary
+            current_sid = None
+            if room['current_turn_index'] < len(room['turn_order']):
+                current_sid = room['turn_order'][room['current_turn_index']]
+            
+            room['turn_order'] = new_turn_order
+            
+            if current_sid == sid:
+                # It WAS their turn, now it's the next person's turn at the same index
+                room['current_turn_index'] = room['current_turn_index'] % len(room['turn_order'])
+                next_sid = room['turn_order'][room['current_turn_index']]
+                next_name = room['players'].get(next_sid, {}).get('name', 'Player')
+                socketio.emit('turn_changed', {'turn_sid': next_sid, 'turn_name': next_name}, to=room_id)
+                start_turn_timer(room_id)
+            else:
+                # Find new index of current_sid
+                if current_sid in new_turn_order:
+                    room['current_turn_index'] = new_turn_order.index(current_sid)
+                else:
+                    room['current_turn_index'] = 0
 
 # @socketio.on('send_message')
 # def on_send_message(data):

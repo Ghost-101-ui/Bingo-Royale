@@ -1597,3 +1597,64 @@ input:checked+.slider:before {
         font-size: 1.2rem;
     }
 }
+
+/* --- Vote to Kick & Offline Styles --- */
+.player-item.offline {
+    opacity: 0.6;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.player-item.offline .status-indicator {
+    background: #444;
+    color: #888;
+}
+
+.kick-btn {
+    background: var(--danger);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-left: auto;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.kick-btn:hover {
+    background: #ff3333;
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.vote-card {
+    background: var(--bg-color);
+    border: 2px solid var(--secondary);
+    border-radius: 20px;
+    padding: 2.5rem;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.vote-title {
+    color: var(--accent);
+    font-size: 1.8rem;
+    margin-bottom: 1rem;
+    font-weight: 800;
+}
+
+.vote-msg {
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+    color: var(--text-main);
+}
+
+.vote-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}

@@ -72,6 +72,16 @@ const mode18Toggle = document.getElementById('mode-18-toggle');
 const bgmVolumeSlider = document.getElementById('bgm-volume');
 const sfxVolumeSlider = document.getElementById('sfx-volume');
 
+// Vote UI Elements
+const voteOverlay = document.getElementById('vote-overlay');
+const voteMsg = document.getElementById('vote-msg');
+const voteYesBtn = document.getElementById('vote-yes-btn');
+const voteNoBtn = document.getElementById('vote-no-btn');
+const changeNameBtn = document.getElementById('change-name-btn');
+const kickPunishmentOverlay = document.getElementById('kick-punishment-overlay');
+
+let voteTimerInterval = null;
+
 // State
 let myId = null;
 let isHost = false;
@@ -125,8 +135,8 @@ const SoundManager = {
     btnClick: new Audio('/static/sounds/btnclick.mp3'),
     yourTurn: new Audio('/static/sounds/your-turn.mp3'),
     win: new Audio('/static/sounds/win.mp3'),
-    loss: new Audio('/static/sounds/loss.mp3'),
-    notYourTurn: new Audio('/static/sounds/fahhh.mp3'),
+    loss: new Audio('/static/sounds/fahhh.mp3'),
+    notYourTurn: new Audio('/static/sounds/your-turn.mp3'),
     intro: new Audio('/static/sounds/intro.mp3'),
 
     // These will be linked in init() to ensure DOM readiness
@@ -136,7 +146,7 @@ const SoundManager = {
 
     // 18+ Mode sounds
     win18: new Audio('/static/sounds/bete-win.mp3'),
-    loss18: new Audio('/static/sounds/bsdk-loss.mp3'),
+    loss18: new Audio('/static/sounds/fahhh.mp3'),
     btnClick18: new Audio('/static/sounds/ahh-btn.mp3'),
 
     isMuted: false,
@@ -170,7 +180,7 @@ const SoundManager = {
         if (mode18Toggle) mode18Toggle.checked = this.is18Plus;
 
         this.bgMusic.loop = true;
-        this.loss18.loop = true;
+        this.loss18.loop = false;
         this.updateVolumes();
 
         // Start the actual intro sequence automatically on load
@@ -630,22 +640,49 @@ socket.on('player_list', (data) => {
     gamePlayerList.innerHTML = '';
     playerCount.textContent = `${players.length} Player${players.length !== 1 ? 's' : ''}`;
 
+    // First, determine if I am host
+    const myName = localStorage.getItem('bingo_name');
+    const me = players.find(p => p.name === myName);
+    if (me) isHost = me.is_host;
+
     let allReady = true;
 
     players.forEach(p => {
-        if (p.id === myId) { isHost = p.is_host; }
-        if (!p.board_ready) allReady = false;
+        if (!p.board_ready && p.is_online) allReady = false;
 
         const li = document.createElement('li');
-        li.className = `player-item ${p.is_host ? 'host' : ''} ${p.board_ready ? 'ready' : ''}`;
+        li.className = `player-item ${p.is_host ? 'host' : ''} ${p.board_ready ? 'ready' : ''} ${!p.is_online ? 'offline' : ''}`;
+        
         let statusText = p.board_ready ? 'Ready' : 'Arranging...';
+        if (!p.is_online) statusText = 'Offline';
         if (p.is_host) statusText += ' (Host)';
-        li.innerHTML = `<span>${p.name} ${p.id === myId ? '(You)' : ''}</span><span class="status-indicator ${p.board_ready ? 'ready' : ''}">${statusText}</span>`;
+        
+        let kickBtnHtml = '';
+        if (isHost && p.name !== myName) {
+            kickBtnHtml = `<button class="kick-btn" onclick="initiateKick('${p.name}', '${p.id || ''}')">Kick</button>`;
+        }
+
+        li.innerHTML = `
+            <span>${p.name} ${p.name === myName ? '(You)' : ''}</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="status-indicator ${p.board_ready && p.is_online ? 'ready' : ''}">${statusText}</span>
+                ${kickBtnHtml}
+            </div>
+        `;
         playerList.appendChild(li);
 
         const miniLi = document.createElement('li');
-        let linesDisplay = p.id === myId ? `${p.bingo_lines} Lines` : `? Lines`;
-        miniLi.innerHTML = `<span>${p.name} ${p.id === myId ? '(You)' : ''}</span><span class="accent">${linesDisplay}</span>`;
+        miniLi.className = !p.is_online ? 'offline' : '';
+        let linesDisplay = p.name === myName ? `${p.bingo_lines} Lines` : `? Lines`;
+        if (!p.is_online) linesDisplay = 'Offline';
+        
+        miniLi.innerHTML = `
+            <span>${p.name} ${p.name === myName ? '(You)' : ''}</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="accent">${linesDisplay}</span>
+                ${kickBtnHtml}
+            </div>
+        `;
         gamePlayerList.appendChild(miniLi);
     });
 
@@ -975,6 +1012,107 @@ socket.on('next_round', () => {
 socket.on('end_session', () => {
     showNotification("Host ended session.");
     setTimeout(() => { window.location.href = '/'; }, 2000);
+});
+
+// Vote to Kick Logic
+function initiateKick(name, sid) {
+    if (!isHost) return;
+    SoundManager.playBtnClick();
+    if (confirm(`Initiate vote to kick ${name}?`)) {
+        socket.emit('initiate_kick_vote', { target_name: name, target_sid: sid, room: roomCode });
+    }
+}
+
+socket.on('kick_vote_started', (data) => {
+    if (data.target_name === localStorage.getItem('bingo_name')) {
+        showNotification(`A vote to kick YOU has been started by ${data.initiator_name}!`);
+        return;
+    }
+    
+    let timeLeft = 5;
+    voteMsg.textContent = `Kick ${data.target_name}? (${timeLeft}s) - Started by ${data.initiator_name}`;
+    voteOverlay.classList.remove('hidden');
+    SoundManager.playYourTurn();
+
+    clearInterval(voteTimerInterval);
+    voteTimerInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft >= 0) {
+            voteMsg.textContent = `Kick ${data.target_name}? (${timeLeft}s) - Started by ${data.initiator_name}`;
+        } else {
+            clearInterval(voteTimerInterval);
+        }
+    }, 1000);
+});
+
+socket.on('kick_vote_ended', (data) => {
+    clearInterval(voteTimerInterval);
+    voteOverlay.classList.add('hidden');
+    if (data.passed) {
+        showNotification(`Player ${data.target_name} has been kicked!`, 5000);
+        // Play the loss sound for everyone!
+        SoundManager.playLoss();
+    } else {
+        showNotification(`Vote to kick ${data.target_name} failed.`, 3000);
+    }
+});
+
+socket.on('kicked', (data) => {
+    // Show punishment overlay instead of redirecting
+    kickPunishmentOverlay.classList.remove('hidden');
+    // Hide everything else to trap them
+    document.querySelector('.app-container').style.display = 'none';
+    
+    // Stop background music
+    SoundManager.bgMusic.pause();
+    
+    // Prevent normal navigation (though users can still force close)
+    window.onbeforeunload = function() {
+        return "Are you sure you want to leave your punishment?";
+    };
+});
+
+if (voteYesBtn) {
+    voteYesBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        socket.emit('submit_kick_vote', { vote: 'yes', room: roomCode });
+        voteOverlay.classList.add('hidden');
+        showNotification("Vote submitted: Yes");
+    });
+}
+
+if (voteNoBtn) {
+    voteNoBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        socket.emit('submit_kick_vote', { vote: 'no', room: roomCode });
+        voteOverlay.classList.add('hidden');
+        showNotification("Vote submitted: No");
+    });
+}
+
+if (changeNameBtn) {
+    changeNameBtn.addEventListener('click', () => {
+        SoundManager.playBtnClick();
+        const currentName = localStorage.getItem('bingo_name');
+        const newName = prompt("Enter new name:", currentName);
+        if (newName && newName.trim() && newName.trim() !== currentName) {
+            socket.emit('change_name', { new_name: newName.trim() });
+        }
+    });
+}
+
+socket.on('name_changed', (data) => {
+    localStorage.setItem('bingo_name', data.new_name);
+    showNotification(`Name changed to: ${data.new_name}`);
+});
+
+socket.on('room_full', (data) => {
+    showNotification(data.message || "Room is full!", 5000);
+    setTimeout(() => { window.location.href = '/'; }, 3000);
+});
+
+socket.on('error', (data) => {
+    showNotification(data.message || "An error occurred.", 5000);
 });
 
 // Initialize on load
