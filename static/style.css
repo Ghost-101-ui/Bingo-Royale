@@ -487,6 +487,12 @@ button {
     font-size: 1rem;
     text-transform: uppercase;
     letter-spacing: 1px;
+    white-space: normal; /* Allow text to wrap on small screens */
+    line-height: 1.2;    /* Better spacing for wrapped text */
+    text-align: center;
+    min-height: 48px;    /* Accessibility: Comfortable tap target */
+    position: relative;
+    z-index: 5;          /* Ensure buttons stay above layout elements */
 }
 
 button:hover:not(:disabled) {
@@ -1595,6 +1601,12 @@ input:checked+.slider:before {
 
     .board-cell {
         font-size: 1.2rem;
+    }
+
+    .btn-row {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
     }
 }
 

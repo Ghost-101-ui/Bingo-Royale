@@ -135,8 +135,8 @@ const SoundManager = {
     btnClick: new Audio('/static/sounds/btnclick.mp3'),
     yourTurn: new Audio('/static/sounds/your-turn.mp3'),
     win: new Audio('/static/sounds/win.mp3'),
-    loss: new Audio('/static/sounds/fahhh.mp3'),
-    notYourTurn: new Audio('/static/sounds/your-turn.mp3'),
+    loss: new Audio('/static/sounds/loss.mp3'),
+    notYourTurn: new Audio('/static/sounds/fahhh.mp3'),
     intro: new Audio('/static/sounds/intro.mp3'),
 
     // These will be linked in init() to ensure DOM readiness
@@ -146,13 +146,14 @@ const SoundManager = {
 
     // 18+ Mode sounds
     win18: new Audio('/static/sounds/bete-win.mp3'),
-    loss18: new Audio('/static/sounds/fahhh.mp3'),
+    loss18: new Audio('/static/sounds/bsdk-loss.mp3'),
     btnClick18: new Audio('/static/sounds/ahh-btn.mp3'),
 
     isMuted: false,
     is18Plus: false,
     bgmVolume: 0.2,
     sfxVolume: 0.5,
+    loss18Interval: null,
 
     init() {
         console.log("Initializing SoundManager...");
@@ -312,16 +313,25 @@ const SoundManager = {
     },
 
     playLoss() {
-        this.loss.currentTime = 0;
-        this.loss18.currentTime = 0;
+        this.stopAllLoopingSounds();
         if (this.is18Plus) {
+            this.loss18.currentTime = 0;
             this.loss18.play().catch(e => console.log("Audio play prevented."));
+            this.loss18Interval = setInterval(() => {
+                this.loss18.currentTime = 0;
+                this.loss18.play().catch(e => console.log("Audio play prevented."));
+            }, 500);
         } else {
+            this.loss.currentTime = 0;
             this.loss.play().catch(e => console.log("Audio play prevented."));
         }
     },
 
     stopAllLoopingSounds() {
+        if (this.loss18Interval) {
+            clearInterval(this.loss18Interval);
+            this.loss18Interval = null;
+        }
         this.win.pause();
         this.win.currentTime = 0;
         this.loss.pause();
@@ -852,10 +862,17 @@ socket.on('start_game', () => {
         cell.textContent = num;
         cell.id = `cell-${num}`;
         cell.addEventListener('click', () => {
-            if (currentTurnSid === myId && !calledNumbers.includes(num)) {
-                SoundManager.playBtnClick();
-                socket.emit('call_number', { number: num, room: roomCode });
-            } else if (currentTurnSid !== myId) {
+            if (currentTurnSid === myId) {
+                if (!calledNumbers.includes(num)) {
+                    SoundManager.playBtnClick();
+                    socket.emit('call_number', { number: num, room: roomCode });
+                } else {
+                    // Already called number
+                    SoundManager.playNotYourTurn();
+                    showNotification("This number is already called!");
+                }
+            } else {
+                // Not your turn
                 SoundManager.playNotYourTurn();
                 showNotification("It's not your turn!");
             }
@@ -1050,8 +1067,8 @@ socket.on('kick_vote_ended', (data) => {
     voteOverlay.classList.add('hidden');
     if (data.passed) {
         showNotification(`Player ${data.target_name} has been kicked!`, 5000);
-        // Play the loss sound for everyone!
-        SoundManager.playLoss();
+        // Play the fahhh sound when someone is kicked!
+        SoundManager.playNotYourTurn();
     } else {
         showNotification(`Vote to kick ${data.target_name} failed.`, 3000);
     }
